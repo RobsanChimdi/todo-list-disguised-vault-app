@@ -104,42 +104,31 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
       return;
     }
 
-    final now = DateTime.now();
     Note note;
 
     if (_isEditing) {
-      // Update existing note
       note = widget.note!.copyWith(
         title: _titleController.text.trim(),
-        content: _contentController.text.isEmpty
+        content: _contentController.text.trim().isEmpty
             ? null
-            : _contentController.text,
-        lastEdited: now,
+            : _contentController.text.trim(),
         isFavorite: _isFavorite,
-        tags: _tags.isEmpty ? null : _tags,
-        wordCount: _wordCount,
+        tags: _tags,
         backgroundColor: _getSelectedColorValue(),
       );
     } else {
-      // Create new note
-      note = Note(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: _titleController.text.trim(),
-        content: _contentController.text.isEmpty
-            ? null
-            : _contentController.text,
-        createdAt: now,
-        lastEdited: now,
-        isFavorite: _isFavorite,
-        tags: _tags.isEmpty ? null : _tags,
-        wordCount: _wordCount,
-        backgroundColor: _getSelectedColorValue(),
-      );
+      note =
+          Note.create(
+            title: _titleController.text.trim(),
+            content: _contentController.text.trim().isEmpty
+                ? null
+                : _contentController.text.trim(),
+            tags: _tags,
+          ).copyWith(
+            isFavorite: _isFavorite,
+            backgroundColor: _getSelectedColorValue(),
+          );
     }
-
-    setState(() {
-      _isSaved = true;
-    });
 
     Navigator.pop(context, note);
   }

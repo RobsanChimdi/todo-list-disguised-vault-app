@@ -1,24 +1,35 @@
-// controllers/note_controller.dart
 import '../../data/models/note_model.dart';
 
 class NoteController {
   List<Note> _notes = [];
 
+  // Add dispose method
+  void dispose() {
+    // Clean up any resources if needed
+  }
+
   List<Note> get notes => _notes;
 
-  void addNote(Note note) {
+  Future<void> addNote(Note note) async {
+    // Simulate async operation
+    await Future.delayed(Duration.zero);
     _notes.add(note);
   }
 
-  void deleteNote(int index) {
-    _notes.removeAt(index);
+  Future<void> deleteNote(int index) async {
+    await Future.delayed(Duration.zero);
+    if (index >= 0 && index < _notes.length) {
+      _notes.removeAt(index);
+    }
   }
 
-  void deleteNoteById(String id) {
+  Future<void> deleteNoteById(String id) async {
+    await Future.delayed(Duration.zero);
     _notes.removeWhere((note) => note.id == id);
   }
 
-  void updateNote(Note updatedNote) {
+  Future<void> updateNote(Note updatedNote) async {
+    await Future.delayed(Duration.zero);
     final index = _notes.indexWhere((note) => note.id == updatedNote.id);
     if (index != -1) {
       _notes[index] = updatedNote;
