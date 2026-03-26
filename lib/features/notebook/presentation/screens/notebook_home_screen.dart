@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../controllers/note_controller.dart';
 import 'add_edit_note_screen.dart';
 import 'note_detail_screen.dart';
+import '../widgets/search_bar_widget.dart';
+import '../widgets/empty_state_widget.dart';
+import '../widgets/confirmation_dialog.dart';
+import '../widgets/note_list_item.dart';
 
 class NotebookHomeScreen extends StatefulWidget {
   @override
@@ -14,6 +18,7 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
   String _searchQuery = '';
   bool _isGridView = false;
 
+  // Update the build method to use the new widgets
   @override
   Widget build(BuildContext context) {
     final filteredNotes = controller.notes.where((note) {
@@ -26,41 +31,32 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: _isSearching
-            ? TextField(
-                autofocus: true,
-                style: TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Search notes...',
-                  hintStyle: TextStyle(color: Colors.white70),
-                  border: InputBorder.none,
-                  prefixIcon: Icon(Icons.search, color: Colors.white),
-                ),
-                onChanged: (value) {
+            ? SearchBarWidget(
+                onSearch: (query) {
                   setState(() {
-                    _searchQuery = value;
+                    _searchQuery = query;
+                  });
+                },
+                onClose: () {
+                  setState(() {
+                    _isSearching = false;
+                    _searchQuery = '';
                   });
                 },
               )
-            : Text("My Notes", style: TextStyle(fontWeight: FontWeight.bold)),
+            : const Text(
+                "My Notes",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
         backgroundColor: Theme.of(context).primaryColor,
         elevation: 0,
         actions: [
           if (!_isSearching)
             IconButton(
-              icon: Icon(Icons.search),
+              icon: const Icon(Icons.search),
               onPressed: () {
                 setState(() {
                   _isSearching = true;
-                });
-              },
-            ),
-          if (_isSearching)
-            IconButton(
-              icon: Icon(Icons.close),
-              onPressed: () {
-                setState(() {
-                  _isSearching = false;
-                  _searchQuery = '';
                 });
               },
             ),
@@ -90,7 +86,7 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
               }
             },
             itemBuilder: (context) => [
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'sort_by_date',
                 child: Row(
                   children: [
@@ -100,7 +96,7 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
                   ],
                 ),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'sort_by_title',
                 child: Row(
                   children: [
@@ -115,10 +111,107 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
         ],
       ),
       body: filteredNotes.isEmpty
-          ? _buildEmptyState()
+          ? EmptyStateWidget(
+              icon: Icons.note_add,
+              title: 'No notes yet',
+              subtitle: 'Tap the + button to create your first note',
+              onActionPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => AddEditNoteScreen()),
+                );
+                if (result != null) {
+                  setState(() {
+                    controller.addNote(result);
+                  });
+                  _showSnackBar('Note added successfully');
+                }
+              },
+              actionLabel: 'Create Note',
+            )
           : _isGridView
-          ? _buildGridView(filteredNotes)
-          : _buildListView(filteredNotes),
+          ? GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: filteredNotes.length,
+              itemBuilder: (context, index) {
+                final note = filteredNotes[index];
+                return NoteListItem(
+                  note: note,
+                  isGridView: true,
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NoteDetailScreen(note: note),
+                      ),
+                    );
+                    if (result != null) {
+                      setState(() {});
+                    }
+                  },
+                  onDelete: () async {
+                    final confirmed = await ConfirmationDialog.show(
+                      context: context,
+                      title: 'Delete Note',
+                      message:
+                          'Are you sure you want to delete "${note.title}"?',
+                      confirmText: 'Delete',
+                      icon: Icons.delete,
+                    );
+                    if (confirmed == true) {
+                      setState(() {
+                        controller.deleteNoteById(note.id);
+                      });
+                      _showSnackBar('Note deleted');
+                    }
+                  },
+                );
+              },
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: filteredNotes.length,
+              itemBuilder: (context, index) {
+                final note = filteredNotes[index];
+                return NoteListItem(
+                  note: note,
+                  isGridView: false,
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NoteDetailScreen(note: note),
+                      ),
+                    );
+                    if (result != null) {
+                      setState(() {});
+                    }
+                  },
+                  onDelete: () async {
+                    final confirmed = await ConfirmationDialog.show(
+                      context: context,
+                      title: 'Delete Note',
+                      message:
+                          'Are you sure you want to delete "${note.title}"?',
+                      confirmText: 'Delete',
+                      icon: Icons.delete,
+                    );
+                    if (confirmed == true) {
+                      setState(() {
+                        controller.deleteNoteById(note.id);
+                      });
+                      _showSnackBar('Note deleted');
+                    }
+                  },
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           final result = await Navigator.push(
@@ -132,8 +225,8 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
             _showSnackBar('Note added successfully');
           }
         },
-        icon: Icon(Icons.add),
-        label: Text('New Note'),
+        icon: const Icon(Icons.add),
+        label: const Text('New Note'),
         elevation: 4,
       ),
     );
