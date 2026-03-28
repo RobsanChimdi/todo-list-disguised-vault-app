@@ -1,7 +1,7 @@
 class Note {
   final String id;
   final String title;
-  final String? content;
+  final String content;
   final DateTime createdAt;
   final DateTime lastEdited;
   final bool isFavorite;
@@ -14,32 +14,34 @@ class Note {
   const Note({
     required this.id,
     required this.title,
-    this.content,
+    required this.content,
     required this.createdAt,
     required this.lastEdited,
     this.isFavorite = false,
     this.isArchived = false,
     this.tags = const [],
     this.wordCount = 0,
-    this.backgroundColor = 0xFFFFFFFF, // default white
+    this.backgroundColor = 0xFFFFFFFF,
     this.colorLabel,
   });
 
-  /// Factory: Create new note
   factory Note.create({
     required String title,
     String? content,
     List<String>? tags,
   }) {
     final now = DateTime.now();
-    final words = content?.trim().isEmpty == true
+
+    final cleanContent = content?.trim() ?? '';
+
+    final words = cleanContent.isEmpty
         ? 0
-        : content!.trim().split(RegExp(r'\s+')).length;
+        : cleanContent.split(RegExp(r'\s+')).length;
 
     return Note(
-      id: now.microsecondsSinceEpoch.toString(), // more unique
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
       title: title.trim(),
-      content: content?.trim(),
+      content: cleanContent,
       createdAt: now,
       lastEdited: now,
       tags: tags ?? [],
@@ -47,7 +49,6 @@ class Note {
     );
   }
 
-  /// CopyWith (immutable update)
   Note copyWith({
     String? title,
     String? content,
@@ -64,7 +65,7 @@ class Note {
       title: title ?? this.title,
       content: updatedContent,
       createdAt: createdAt,
-      lastEdited: DateTime.now(), // auto update
+      lastEdited: DateTime.now(),
       isFavorite: isFavorite ?? this.isFavorite,
       isArchived: isArchived ?? this.isArchived,
       tags: tags ?? this.tags,
@@ -74,13 +75,12 @@ class Note {
     );
   }
 
-  /// Helper: Word count
-  static int _calculateWordCount(String? text) {
-    if (text == null || text.trim().isEmpty) return 0;
-    return text.trim().split(RegExp(r'\s+')).length;
+  static int _calculateWordCount(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return 0;
+    return trimmed.split(RegExp(r'\s+')).length;
   }
 
-  /// Convert to JSON
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
@@ -95,12 +95,11 @@ class Note {
     'colorLabel': colorLabel,
   };
 
-  /// Create from JSON
   factory Note.fromJson(Map<String, dynamic> json) {
     return Note(
       id: json['id'] as String,
       title: json['title'] as String,
-      content: json['content'],
+      content: json['content'] as String? ?? '',
       createdAt: DateTime.parse(json['createdAt']),
       lastEdited: json['lastEdited'] != null
           ? DateTime.parse(json['lastEdited'])

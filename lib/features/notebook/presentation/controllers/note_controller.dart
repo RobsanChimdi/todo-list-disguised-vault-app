@@ -1,54 +1,63 @@
+import 'package:flutter/material.dart';
+import '../../data/repositories/note_repository.dart';
 import '../../data/models/note_model.dart';
 
-class NoteController {
-  List<Note> _notes = [];
+class NoteController extends ChangeNotifier {
+  final NoteRepository _repository;
 
-  // Add dispose method
-  void dispose() {
-    // Clean up any resources if needed
+  List<Note> _notes = [];
+  bool _isLoading = false;
+  String? _error;
+
+  NoteController(this._repository) {
+    loadNotes();
   }
 
   List<Note> get notes => _notes;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
 
-  Future<void> addNote(Note note) async {
-    // Simulate async operation
-    await Future.delayed(Duration.zero);
-    _notes.add(note);
+  Future<void> loadNotes() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _notes = _repository.getAllNotes(); // sync
+    } catch (e) {
+      _error = e.toString();
+    }
+
+    _isLoading = false;
+    notifyListeners();
   }
 
-  Future<void> deleteNote(int index) async {
-    await Future.delayed(Duration.zero);
-    if (index >= 0 && index < _notes.length) {
-      _notes.removeAt(index);
-    }
+  Future<void> addNote(Note note) async {
+    await _repository.saveNote(note);
+    await loadNotes();
+  }
+
+  Future<void> updateNote(Note note) async {
+    await _repository.updateNote(note);
+    await loadNotes();
   }
 
   Future<void> deleteNoteById(String id) async {
-    await Future.delayed(Duration.zero);
-    _notes.removeWhere((note) => note.id == id);
+    await _repository.deleteNote(id);
+    await loadNotes();
   }
 
-  Future<void> updateNote(Note updatedNote) async {
-    await Future.delayed(Duration.zero);
-    final index = _notes.indexWhere((note) => note.id == updatedNote.id);
-    if (index != -1) {
-      _notes[index] = updatedNote;
-    }
+  Future<void> toggleFavorite(Note note) async {
+    final updated = note.copyWith(isFavorite: !note.isFavorite);
+    await updateNote(updated);
   }
 
-  List<Note> getFavoriteNotes() {
-    return _notes.where((note) => note.isFavorite).toList();
+  Future<void> toggleArchive(Note note) async {
+    final updated = note.copyWith(isArchived: !note.isArchived);
+    await updateNote(updated);
   }
 
-  List<Note> getArchivedNotes() {
-    return _notes.where((note) => note.isArchived).toList();
-  }
-
-  List<Note> searchNotes(String query) {
-    if (query.isEmpty) return _notes;
-    return _notes.where((note) {
-      return note.title.toLowerCase().contains(query.toLowerCase()) ||
-          (note.content?.toLowerCase().contains(query.toLowerCase()) ?? false);
-    }).toList();
+  List<Note> search(String query) {
+    return _repository.searchNotes(query);
   }
 }
