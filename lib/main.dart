@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'features/notebook/presentation/screens/notebook_home_screen.dart';
+import 'core/services/local_storage_service.dart';
 import 'app.dart';
 
-void main() {
-  runApp(MyApp());
-}
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-class MyApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(home: MyWidget(title: "goal"));
-  }
+  await LocalStorageService().init(); // 🔥 initialize Hive
+
+  runApp(MyApp());
 }
