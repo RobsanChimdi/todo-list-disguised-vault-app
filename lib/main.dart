@@ -1,27 +1,19 @@
 // lib/main.dart
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 import 'app.dart';
-import 'core/services/local_storage_service.dart';
-import 'core/services/secure_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize services
-  final localStorage = LocalStorageService();
-  await localStorage.init();
+  // Initialize any pre-app services here
+  await _initializeServices();
 
-  final secureStorage = SecureStorageService();
+  runApp(const AppRoot());
+}
 
-  runApp(
-    MultiProvider(
-      providers: [
-        Provider.value(value: localStorage),
-        Provider.value(value: secureStorage),
-        // Add more providers as needed
-      ],
-      child: MyApp(),
-    ),
-  );
+Future<void> _initializeServices() async {
+  // Add any pre-initialization services here
+  // For example, crash reporting, analytics, etc.
 }
