@@ -22,6 +22,8 @@ class AuthController extends GetxController {
   final RxInt failedAttempts = 0.obs;
   final RxBool isLocked = false.obs;
   final Rx<DateTime?> lockoutUntil = Rx<DateTime?>(null);
+  final RxBool showVaultAccess =
+      false.obs; // Track if vault access is requested
 
   // Constants
   static const int maxFailedAttempts = 5;
@@ -30,37 +32,27 @@ class AuthController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _checkInitialAuthState();
+    _checkExistingPin();
   }
 
-  Future<void> _checkInitialAuthState() async {
+  Future<void> _checkExistingPin() async {
     try {
-      isLoading.value = true;
-
-      // Check if PIN exists
       final pin = await _secureStorage.readSecureData('user_pin');
       hasPin.value = pin != null && pin.isNotEmpty;
 
-      // Check if user is already logged in
-      final userId = await _secureStorage.readSecureData('user_id');
-      if (userId != null && hasPin.value) {
-        await _loadUserData(userId);
-        isAuthenticated.value = true;
+      if (hasPin.value) {
+        final userId = await _secureStorage.readSecureData('user_id');
+        if (userId != null) {
+          await _loadUserData(userId);
+        }
       }
-
-      // Check if app is locked
-      final lockStatus = await _localStorage.readData('is_locked');
-      isLocked.value = lockStatus == true;
     } catch (e) {
-      debugPrint('Error checking auth state: $e');
-    } finally {
-      isLoading.value = false;
+      debugPrint('Error checking PIN: $e');
     }
   }
 
   Future<void> _loadUserData(String userId) async {
     try {
-      // Load user data from local storage
       final userData = await _localStorage.readData('user_$userId');
       if (userData != null && userData is Map<String, dynamic>) {
         currentUser.value = User.fromJson(userData);
@@ -70,8 +62,21 @@ class AuthController extends GetxController {
     }
   }
 
+  // Trigger vault access (called after secret gesture)
+  Future<void> requestVaultAccess() async {
+    if (!hasPin.value) {
+      // First time setup - show PIN creation
+      showVaultAccess.value = true;
+      Get.toNamed('/set-pin');
+    } else {
+      // Show PIN entry screen
+      showVaultAccess.value = true;
+      Get.toNamed('/lock-screen');
+    }
+  }
+
   // Set initial PIN
-  Future<bool> setPin(String pin, {String? userId}) async {
+  Future<bool> setPin(String pin) async {
     try {
       isLoading.value = true;
 
@@ -80,7 +85,7 @@ class AuthController extends GetxController {
       }
 
       final user = User(
-        id: userId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
         pin: pin,
         createdAt: DateTime.now(),
       );
@@ -102,6 +107,10 @@ class AuthController extends GetxController {
       // Reset failed attempts
       await _resetFailedAttempts();
 
+      // Close PIN setup screen and open vault
+      Get.back();
+      _openVaultAfterAuth();
+
       return true;
     } catch (e) {
       debugPrint('Error setting PIN: $e');
@@ -111,17 +120,22 @@ class AuthController extends GetxController {
     }
   }
 
-  // Verify PIN
-  Future<bool> verifyPin(String enteredPin) async {
+  // Verify PIN for vault access
+  Future<bool> verifyPinForVault(String enteredPin) async {
     try {
       isLoading.value = true;
 
       // Check if app is locked
       if (isLocked.value && lockoutUntil.value != null) {
         if (DateTime.now().isBefore(lockoutUntil.value!)) {
+          Get.snackbar(
+            'Locked',
+            'Too many failed attempts. Try again in ${_getRemainingLockoutTime()}',
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+          );
           return false;
         } else {
-          // Lockout period expired
           await _resetFailedAttempts();
         }
       }
@@ -129,17 +143,25 @@ class AuthController extends GetxController {
       final storedPin = await _secureStorage.readSecureData('user_pin');
 
       if (storedPin == enteredPin) {
-        // Successful login
+        // Successful authentication
         await _resetFailedAttempts();
         isAuthenticated.value = true;
-        isLocked.value = false;
-        await _localStorage.writeData('is_locked', false);
 
-        // Load user data if needed
-        final userId = await _secureStorage.readSecureData('user_id');
-        if (userId != null && currentUser.value == null) {
-          await _loadUserData(userId);
+        // Update last login
+        if (currentUser.value != null) {
+          final updatedUser = currentUser.value!.copyWith(
+            lastLoginAt: DateTime.now(),
+          );
+          await _localStorage.writeData(
+            'user_${updatedUser.id}',
+            updatedUser.toJson(),
+          );
+          currentUser.value = updatedUser;
         }
+
+        // Close lock screen and open vault
+        Get.back();
+        _openVaultAfterAuth();
 
         return true;
       } else {
@@ -150,6 +172,21 @@ class AuthController extends GetxController {
         // Check if max attempts reached
         if (failedAttempts.value >= maxFailedAttempts) {
           await _lockApp();
+          Get.back(); // Close PIN screen
+          Get.snackbar(
+            'App Locked',
+            'Too many failed attempts. Please try again later.',
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+            duration: const Duration(seconds: 3),
+          );
+        } else {
+          Get.snackbar(
+            'Invalid PIN',
+            '${maxFailedAttempts - failedAttempts.value} attempts remaining',
+            backgroundColor: Colors.orange,
+            colorText: Colors.white,
+          );
         }
 
         return false;
@@ -160,6 +197,14 @@ class AuthController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  String _getRemainingLockoutTime() {
+    if (lockoutUntil.value == null) return '5 minutes';
+    final remaining = lockoutUntil.value!.difference(DateTime.now());
+    final minutes = remaining.inMinutes;
+    final seconds = remaining.inSeconds % 60;
+    return '$minutes minutes $seconds seconds';
   }
 
   Future<void> _resetFailedAttempts() async {
@@ -180,79 +225,32 @@ class AuthController extends GetxController {
       lockoutUntil.value!.toIso8601String(),
     );
 
-    // Trigger disguise if needed
+    // Trigger disguise - make app look more like a regular notes app
     await _disguiseService.activateDisguise();
   }
 
-  // Logout
-  Future<void> logout() async {
+  void _openVaultAfterAuth() {
+    // Reset the vault access flag
+    showVaultAccess.value = false;
+
+    // Navigate to vault home
+    Get.toNamed('/vault');
+  }
+
+  // Logout from vault (return to notebook)
+  Future<void> logoutFromVault() async {
     try {
       isLoading.value = true;
 
-      // Clear authentication state
+      // Clear authentication state but keep PIN
       isAuthenticated.value = false;
-      currentUser.value = null;
 
-      // Clear secure storage but keep PIN for next login
-      await _secureStorage.deleteSecureData('user_id');
-
-      // Clear sensitive data from local storage
-      await _localStorage.deleteData('is_locked');
-      await _localStorage.deleteData('failed_attempts');
-      await _localStorage.deleteData('lockout_until');
+      // Navigate back to notebook
+      Get.until((route) => route.settings.name == '/notebook');
     } catch (e) {
       debugPrint('Error logging out: $e');
     } finally {
       isLoading.value = false;
-    }
-  }
-
-  // Change PIN (requires current PIN verification)
-  Future<bool> changePin(String currentPin, String newPin) async {
-    try {
-      isLoading.value = true;
-
-      // Verify current PIN
-      final isValid = await verifyPin(currentPin);
-      if (!isValid) {
-        return false;
-      }
-
-      if (newPin.length != 4 && newPin.length != 6) {
-        return false;
-      }
-
-      // Update PIN
-      await _secureStorage.writeSecureData('user_pin', newPin);
-
-      // Update user data
-      if (currentUser.value != null) {
-        final updatedUser = currentUser.value!.copyWith(pin: newPin);
-        await _localStorage.writeData(
-          'user_${updatedUser.id}',
-          updatedUser.toJson(),
-        );
-        currentUser.value = updatedUser;
-      }
-
-      return true;
-    } catch (e) {
-      debugPrint('Error changing PIN: $e');
-      return false;
-    } finally {
-      isLoading.value = false;
-    }
-  }
-
-  // Check if initial setup is complete
-  Future<bool> isInitialSetupComplete() async {
-    try {
-      final isComplete = await _localStorage.readData(
-        'is_initial_setup_complete',
-      );
-      return isComplete == true;
-    } catch (e) {
-      return false;
     }
   }
 
@@ -275,6 +273,7 @@ class AuthController extends GetxController {
       failedAttempts.value = 0;
       isLocked.value = false;
       lockoutUntil.value = null;
+      showVaultAccess.value = false;
     } catch (e) {
       debugPrint('Error resetting app: $e');
     } finally {
@@ -284,7 +283,6 @@ class AuthController extends GetxController {
 
   @override
   void onClose() {
-    // Clean up if needed
     super.onClose();
   }
 }
