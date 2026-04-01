@@ -1,9 +1,14 @@
+// lib/features/notebook/presentation/screens/note_detail_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 
 import '../../data/models/note_model.dart';
 import '../controllers/note_controller.dart';
 import 'add_edit_note_screen.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../disguise/services/secret_note_service.dart';
 
 class NoteDetailScreen extends StatefulWidget {
   final Note note;
@@ -30,17 +35,139 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
   void initState() {
     super.initState();
     _currentNote = widget.note;
+
+    // Check if this is a secret note and handle authentication
+    _checkSecretNote();
+  }
+
+  void _checkSecretNote() async {
+    final isSecret =
+        _currentNote.isSecretTrigger ||
+        SecretNoteService.isSecretTrigger(_currentNote.title);
+
+    if (isSecret) {
+      // Show authentication dialog
+      final shouldAuthenticate = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.lock_outline, color: Colors.orange.shade700),
+                const SizedBox(width: 8),
+                const Text('Locked Note'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  SecretNoteService.getWarningMessage(_currentNote.title),
+                  style: const TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Note: "${SecretNoteService.getDisguisedTitle(_currentNote.title)}"',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context, false);
+                  Navigator.pop(context); // Go back to home
+                },
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                child: const Text('Unlock'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldAuthenticate == true) {
+        // Request vault access
+        final authController = Get.find<AuthController>();
+        await authController.requestVaultAccess();
+        // Note: After authentication, the user will be navigated to vault
+        // So we don't need to do anything else here
+      }
+    }
   }
 
   @override
   void dispose() {
-    // ❌ DO NOT dispose a Provider-managed controller
-    // _controller.dispose();  ← REMOVE THIS
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isSecret =
+        _currentNote.isSecretTrigger ||
+        SecretNoteService.isSecretTrigger(_currentNote.title);
+
+    // Don't show content if it's a secret note (should be handled by authentication)
+    if (isSecret) {
+      return Scaffold(
+        backgroundColor: Colors.grey.shade100,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.lock, size: 64, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text(
+                'This note is locked',
+                style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Authentication required to view content',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Color(_currentNote.backgroundColor),
       appBar: _buildAppBar(),

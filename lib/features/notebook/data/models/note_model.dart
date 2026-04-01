@@ -1,3 +1,5 @@
+// lib/features/notebook/domain/entities/note.dart
+
 class Note {
   final String id;
   final String title;
@@ -10,6 +12,7 @@ class Note {
   final int wordCount;
   final int backgroundColor;
   final String? colorLabel;
+  final bool isSecretTrigger; // New field for secret trigger
 
   const Note({
     required this.id,
@@ -23,12 +26,14 @@ class Note {
     this.wordCount = 0,
     this.backgroundColor = 0xFFFFFFFF,
     this.colorLabel,
+    this.isSecretTrigger = false, // Default to false
   });
 
   factory Note.create({
     required String title,
     String? content,
     List<String>? tags,
+    bool isSecretTrigger = false,
   }) {
     final now = DateTime.now();
 
@@ -46,6 +51,7 @@ class Note {
       lastEdited: now,
       tags: tags ?? [],
       wordCount: words,
+      isSecretTrigger: isSecretTrigger,
     );
   }
 
@@ -57,6 +63,7 @@ class Note {
     List<String>? tags,
     int? backgroundColor,
     String? colorLabel,
+    bool? isSecretTrigger,
   }) {
     final updatedContent = content ?? this.content;
 
@@ -72,6 +79,7 @@ class Note {
       wordCount: _calculateWordCount(updatedContent),
       backgroundColor: backgroundColor ?? this.backgroundColor,
       colorLabel: colorLabel ?? this.colorLabel,
+      isSecretTrigger: isSecretTrigger ?? this.isSecretTrigger,
     );
   }
 
@@ -93,6 +101,7 @@ class Note {
     'wordCount': wordCount,
     'backgroundColor': backgroundColor,
     'colorLabel': colorLabel,
+    'isSecretTrigger': isSecretTrigger,
   };
 
   factory Note.fromJson(Map<String, dynamic> json) {
@@ -110,6 +119,7 @@ class Note {
       wordCount: json['wordCount'] ?? 0,
       backgroundColor: json['backgroundColor'] ?? 0xFFFFFFFF,
       colorLabel: json['colorLabel'],
+      isSecretTrigger: json['isSecretTrigger'] ?? false,
     );
   }
 }
