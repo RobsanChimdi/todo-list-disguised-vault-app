@@ -225,7 +225,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
   Widget _buildContentSection() {
     final content = _currentNote.content;
 
-    if (content == null || content.trim().isEmpty) {
+    if (content.trim().isEmpty) {
       return const Text('No content', style: TextStyle(color: Colors.grey));
     }
 

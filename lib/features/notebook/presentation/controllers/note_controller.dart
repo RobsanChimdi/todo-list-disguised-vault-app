@@ -1,3 +1,5 @@
+// lib/features/notebook/presentation/controllers/note_controller.dart
+
 import 'package:flutter/material.dart';
 import '../../data/repositories/note_repository.dart';
 import '../../data/models/note_model.dart';
@@ -23,7 +25,7 @@ class NoteController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _notes = _repository.getAllNotes(); // sync
+      _notes = await _repository.getAllNotes();
     } catch (e) {
       _error = e.toString();
     }
@@ -57,7 +59,7 @@ class NoteController extends ChangeNotifier {
     await updateNote(updated);
   }
 
-  List<Note> search(String query) {
-    return _repository.searchNotes(query);
+  Future<List<Note>> search(String query) async {
+    return await _repository.searchNotes(query);
   }
 }

@@ -1,4 +1,5 @@
 // lib/features/notebook/presentation/widgets/confirmation_dialog.dart
+
 import 'package:flutter/material.dart';
 
 class ConfirmationDialog {
@@ -8,17 +9,15 @@ class ConfirmationDialog {
     required String message,
     String confirmText = 'Confirm',
     String cancelText = 'Cancel',
-    Color confirmColor = Colors.red,
     IconData? icon,
-  }) async {
+  }) {
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             if (icon != null) ...[
-              Icon(icon, color: confirmColor),
+              Icon(icon, color: Colors.red),
               const SizedBox(width: 8),
             ],
             Text(title),
@@ -30,13 +29,14 @@ class ConfirmationDialog {
             onPressed: () => Navigator.pop(context, false),
             child: Text(cancelText),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: confirmColor,
-              foregroundColor: Colors.white,
+            child: Text(
+              confirmText,
+              style: TextStyle(
+                color: confirmText == 'Delete' ? Colors.red : null,
+              ),
             ),
-            child: Text(confirmText),
           ),
         ],
       ),

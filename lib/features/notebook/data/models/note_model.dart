@@ -1,18 +1,44 @@
-// lib/features/notebook/domain/entities/note.dart
+// lib/features/notebook/data/models/note_model.dart
 
+import 'package:hive/hive.dart';
+
+@HiveType(typeId: 0)
 class Note {
+  @HiveField(0)
   final String id;
+
+  @HiveField(1)
   final String title;
-  final String content;
+
+  @HiveField(2)
+  final String content; // Changed to non-nullable
+
+  @HiveField(3)
   final DateTime createdAt;
+
+  @HiveField(4)
   final DateTime lastEdited;
+
+  @HiveField(5)
   final bool isFavorite;
+
+  @HiveField(6)
   final bool isArchived;
+
+  @HiveField(7)
   final List<String> tags;
+
+  @HiveField(8)
   final int wordCount;
+
+  @HiveField(9)
   final int backgroundColor;
+
+  @HiveField(10)
   final String? colorLabel;
-  final bool isSecretTrigger; // New field for secret trigger
+
+  @HiveField(11)
+  final bool isSecretTrigger;
 
   const Note({
     required this.id,
@@ -26,19 +52,17 @@ class Note {
     this.wordCount = 0,
     this.backgroundColor = 0xFFFFFFFF,
     this.colorLabel,
-    this.isSecretTrigger = false, // Default to false
+    this.isSecretTrigger = false,
   });
 
   factory Note.create({
     required String title,
-    String? content,
+    String content = '', // Default to empty string
     List<String>? tags,
     bool isSecretTrigger = false,
   }) {
     final now = DateTime.now();
-
-    final cleanContent = content?.trim() ?? '';
-
+    final cleanContent = content.trim();
     final words = cleanContent.isEmpty
         ? 0
         : cleanContent.split(RegExp(r'\s+')).length;

@@ -9,14 +9,14 @@ class NoteRepository {
   NoteRepository(this._storageService);
 
   // ================= GET ALL =================
-  List<Note> getAllNotes() {
-    final notesData = _storageService.getAllNotes();
+  Future<List<Note>> getAllNotes() async {
+    final notesData = await _storageService.getAllNotes();
     return notesData.map((data) => Note.fromJson(data)).toList();
   }
 
   // ================= GET BY ID =================
-  Note? getNoteById(String id) {
-    final noteData = _storageService.getNote(id);
+  Future<Note?> getNoteById(String id) async {
+    final noteData = await _storageService.getNote(id);
     if (noteData != null) {
       return Note.fromJson(noteData);
     }
@@ -39,17 +39,19 @@ class NoteRepository {
   }
 
   // ================= FILTERS =================
-  List<Note> getFavoriteNotes() {
-    return getAllNotes().where((note) => note.isFavorite).toList();
+  Future<List<Note>> getFavoriteNotes() async {
+    final notes = await getAllNotes();
+    return notes.where((note) => note.isFavorite).toList();
   }
 
-  List<Note> getArchivedNotes() {
-    return getAllNotes().where((note) => note.isArchived).toList();
+  Future<List<Note>> getArchivedNotes() async {
+    final notes = await getAllNotes();
+    return notes.where((note) => note.isArchived).toList();
   }
 
   // ================= SEARCH =================
-  List<Note> searchNotes(String query) {
-    final allNotes = getAllNotes();
+  Future<List<Note>> searchNotes(String query) async {
+    final allNotes = await getAllNotes();
 
     if (query.isEmpty) return allNotes;
 
@@ -57,7 +59,7 @@ class NoteRepository {
 
     return allNotes.where((note) {
       return note.title.toLowerCase().contains(lowerQuery) ||
-          (note.content?.toLowerCase().contains(lowerQuery) ?? false);
+          note.content.toLowerCase().contains(lowerQuery);
     }).toList();
   }
 }

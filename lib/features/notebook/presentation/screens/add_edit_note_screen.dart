@@ -141,7 +141,7 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
       note = widget.note!.copyWith(
         title: _titleController.text.trim(),
         content: _contentController.text.trim().isEmpty
-            ? null
+            ? ''
             : _contentController.text.trim(),
         isFavorite: _isFavorite,
         tags: _tags,
@@ -152,9 +152,7 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
       note =
           Note.create(
             title: _titleController.text.trim(),
-            content: _contentController.text.trim().isEmpty
-                ? null
-                : _contentController.text.trim(),
+            content: _contentController.text.trim(),
             tags: _tags,
             isSecretTrigger: _isSecretTrigger,
           ).copyWith(
@@ -162,7 +160,6 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
             backgroundColor: _getSelectedColorValue(),
           );
     }
-
     Navigator.pop(context, note);
   }
 

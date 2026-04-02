@@ -32,20 +32,36 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
   late NoteController controller;
   final AuthController _authController = Get.find<AuthController>();
 
+  // lib/features/notebook/presentation/screens/notebook_home_screen.dart
+
+  // Replace the ever() listener with a simpler approach:
+
   @override
   void initState() {
     super.initState();
+    _initializeController();
+  }
+
+  Future<void> _initializeController() async {
     final localStorage = LocalStorageService();
+    await localStorage.init(); // Make sure to init first
     final repository = NoteRepository(localStorage);
     controller = NoteController(repository);
 
-    // Add listener for auth state changes
-    ever(_authController.isAuthenticated, (bool isAuth) {
-      if (isAuth && mounted) {
-        // Refresh notes when returning from vault
-        controller.loadNotes();
-      }
-    });
+    // Listen to auth changes without ever()
+    _authController.addListener(_onAuthChanged);
+  }
+
+  void _onAuthChanged() {
+    if (_authController.isAuthenticated.value && mounted) {
+      controller.loadNotes();
+    }
+  }
+
+  @override
+  void dispose() {
+    _authController.removeListener(_onAuthChanged);
+    super.dispose();
   }
 
   @override

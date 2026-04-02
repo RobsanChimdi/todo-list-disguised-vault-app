@@ -193,3 +193,34 @@ class VaultController extends GetxController {
     Get.find<AuthController>().logoutFromVault();
   }
 }
+// Add to vault_controller.dart
+
+// 1. Batch import
+Future<void> batchImport(List<XFile> files) async {
+  for (var file in files) {
+    await _addFile(File(file.path), _getFileType(file.path));
+  }
+}
+
+// 2. Create folders in vault
+Future<void> createFolder(String folderName) async {
+  // Implementation for folder organization
+}
+
+// 3. Move files between folders
+Future<void> moveItem(String itemId, String newFolderId) async {
+  // Implementation for moving files
+}
+
+// 4. Share files from vault (with decryption)
+Future<void> shareItem(VaultItem item) async {
+  final decryptedFile = await getDecryptedFile(item);
+  if (decryptedFile != null) {
+    // Share implementation using share_plus package
+  }
+}
+
+// 5. Secure note taking inside vault
+Future<void> createSecureNote(String title, String content) async {
+  // Create encrypted text notes inside vault
+}

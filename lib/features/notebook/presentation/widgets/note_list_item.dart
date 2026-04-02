@@ -29,7 +29,7 @@ class NoteListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     // Check if this is a secret trigger note
     final isSecret =
-        note.isSecretTrigger ?? SecretNoteService.isSecretTrigger(note.title);
+        note.isSecretTrigger || SecretNoteService.isSecretTrigger(note.title);
 
     return isGridView
         ? _buildGridCard(context, isSecret)
@@ -135,11 +135,9 @@ class NoteListItem extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      if (note.content != null &&
-                          note.content!.isNotEmpty &&
-                          !isSecret)
+                      if (note.content.isNotEmpty && !isSecret)
                         Text(
-                          note.content!,
+                          note.content,
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[600],
@@ -168,7 +166,7 @@ class NoteListItem extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            DateFormatter.formatRelative(note.updatedAt),
+                            DateFormatter.formatRelative(note.lastEdited),
                             style: TextStyle(
                               fontSize: 11,
                               color: Colors.grey[500],
@@ -316,9 +314,9 @@ class NoteListItem extends StatelessWidget {
               const SizedBox(height: 8),
 
               // Content preview
-              if (note.content != null && note.content!.isNotEmpty && !isSecret)
+              if (note.content.isNotEmpty && !isSecret)
                 Text(
-                  note.content!,
+                  note.content,
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -343,7 +341,7 @@ class NoteListItem extends StatelessWidget {
                   Icon(Icons.access_time, size: 10, color: Colors.grey[500]),
                   const SizedBox(width: 4),
                   Text(
-                    DateFormatter.formatRelative(note.updatedAt),
+                    DateFormatter.formatRelative(note.lastEdited),
                     style: TextStyle(fontSize: 10, color: Colors.grey[500]),
                   ),
                   if (note.tags.isNotEmpty && !isSecret) ...[
@@ -392,7 +390,6 @@ class NoteListItem extends StatelessWidget {
   void _handleSecretNoteTap(BuildContext context) async {
     final AuthController authController = Get.find<AuthController>();
 
-    // Show a dialog that looks like a regular "locked note" message
     final shouldAuthenticate = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -459,7 +456,6 @@ class NoteListItem extends StatelessWidget {
     );
 
     if (shouldAuthenticate == true) {
-      // Request vault access (this will show PIN entry)
       await authController.requestVaultAccess();
     }
   }

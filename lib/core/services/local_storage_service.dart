@@ -33,13 +33,15 @@ class LocalStorageService {
     await _notesBox.put(noteData['id'], noteData);
   }
 
-  /// Get all notes
-  List<Map<String, dynamic>> getAllNotes() {
+  // lib/core/services/local_storage_service.dart
+
+  // Change getAllNotes to return Future
+  Future<List<Map<String, dynamic>>> getAllNotes() async {
     return _notesBox.values.map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
-  /// Get single note
-  Map<String, dynamic>? getNote(String id) {
+  // Change getNote to return Future
+  Future<Map<String, dynamic>?> getNote(String id) async {
     final data = _notesBox.get(id);
     if (data == null) return null;
     return Map<String, dynamic>.from(data);
