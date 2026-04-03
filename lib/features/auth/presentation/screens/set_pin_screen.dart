@@ -3,11 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_strings.dart';
-import '../../../core/constants/app_styles.dart';
-import '../../../core/widgets/custom_button.dart';
-import '../../../core/widgets/custom_textfield.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_strings.dart';
+import '../../../../core/constants/app_styles.dart';
+import '../../../../core/widgets/custom_button.dart';
+import '../../../../core/widgets/custom_textfield.dart';
 
 class SetPinScreen extends StatefulWidget {
   const SetPinScreen({Key? key}) : super(key: key);
