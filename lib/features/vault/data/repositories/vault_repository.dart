@@ -12,15 +12,16 @@ class VaultRepository {
   final LocalStorageService _storage;
   final EncryptionHelper _encryption;
 
-  static const String vaultBox = 'vault_items'; // Make sure this matches
+  static const String vaultBox = 'vault_items'; // Use the typed box
   static const String vaultDirectory = 'vault_files';
 
   VaultRepository(this._storage) : _encryption = EncryptionHelper();
 
   Future<List<VaultItem>> getAllItems() async {
     try {
-      final items = await _storage.getAll(vaultBox);
-      return items.map((model) => (model as VaultItemModel).toEntity()).toList()
+      // Use typed method
+      final items = await _storage.getAllTyped<VaultItemModel>(vaultBox);
+      return items.map((model) => model.toEntity()).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } catch (e) {
       print('Error loading vault items: $e');
@@ -30,7 +31,7 @@ class VaultRepository {
 
   Future<VaultItem?> getItemById(String id) async {
     try {
-      final model = await _storage.getById(vaultBox, id);
+      final model = await _storage.getTypedById<VaultItemModel>(vaultBox, id);
       return model?.toEntity();
     } catch (e) {
       print('Error getting vault item: $e');
@@ -49,7 +50,7 @@ class VaultRepository {
       );
 
       final model = VaultItemModel.fromEntity(encryptedItem);
-      await _storage.save<VaultItemModel>(vaultBox, model);
+      await _storage.saveTyped<VaultItemModel>(vaultBox, model);
     } catch (e) {
       print('Error adding vault item: $e');
       rethrow;
@@ -59,7 +60,7 @@ class VaultRepository {
   Future<void> updateItem(VaultItem item) async {
     try {
       final model = VaultItemModel.fromEntity(item);
-      await _storage.update<VaultItemModel>(vaultBox, model);
+      await _storage.updateTyped<VaultItemModel>(vaultBox, model);
     } catch (e) {
       print('Error updating vault item: $e');
       rethrow;
@@ -76,7 +77,7 @@ class VaultRepository {
           await file.delete();
         }
       }
-      await _storage.delete(vaultBox, id);
+      await _storage.deleteTyped(vaultBox, id);
     } catch (e) {
       print('Error deleting vault item: $e');
       rethrow;
@@ -114,8 +115,7 @@ class VaultRepository {
       }
 
       // Save encrypted file with unique name
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}.enc';
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}.enc';
       final savedPath = path.join(vaultDir.path, fileName);
       await encryptedFile.copy(savedPath);
 
@@ -131,12 +131,8 @@ class VaultRepository {
       final items = await getAllItems();
       int totalSize = 0;
       for (final item in items) {
-        final fileSize = item.fileSize;
-        if (fileSize is int) {
-          totalSize += fileSize;
-        } else if (fileSize is Future<int>) {
-          totalSize += await fileSize;
-        }
+        final fileSize = item.fileSize is Future ? await item.fileSize : item.fileSize;
+        totalSize += fileSize ?? 0;
       }
       return totalSize;
     } catch (e) {
@@ -152,11 +148,9 @@ class VaultRepository {
       final totalSize = items.fold(0, (sum, item) => sum + item.fileSize);
       final images = items.where((i) => i.fileType.startsWith('image')).length;
       final videos = items.where((i) => i.fileType.startsWith('video')).length;
-      final documents = items
-          .where(
-            (i) => i.fileType == 'application/pdf' || i.fileType == 'document',
-          )
-          .length;
+      final documents = items.where(
+        (i) => i.fileType == 'application/pdf' || i.fileType == 'document',
+      ).length;
 
       return {
         'totalItems': totalItems,
