@@ -32,10 +32,6 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
   late NoteController controller;
   final AuthController _authController = Get.find<AuthController>();
 
-  // lib/features/notebook/presentation/screens/notebook_home_screen.dart
-
-  // Replace the ever() listener with a simpler approach:
-
   @override
   void initState() {
     super.initState();

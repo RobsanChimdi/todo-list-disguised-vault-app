@@ -6,7 +6,7 @@ class VaultItem extends Equatable {
   final String id;
   final String name;
   final String? filePath;
-  final String fileType; // image, video, document, etc.
+  final String fileType;
   final int fileSize;
   final DateTime createdAt;
   final DateTime? lastOpened;

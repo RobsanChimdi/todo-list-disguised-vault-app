@@ -12,15 +12,15 @@ class VaultRepository {
   final LocalStorageService _storage;
   final EncryptionHelper _encryption;
 
-  static const String vaultBox = 'vault_items';
+  static const String vaultBox = 'vault_items'; // Make sure this matches
   static const String vaultDirectory = 'vault_files';
 
   VaultRepository(this._storage) : _encryption = EncryptionHelper();
 
   Future<List<VaultItem>> getAllItems() async {
     try {
-      final items = await _storage.getAll<VaultItemModel>(vaultBox);
-      return items.map((model) => model.toEntity()).toList()
+      final items = await _storage.getAll(vaultBox);
+      return items.map((model) => (model as VaultItemModel).toEntity()).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } catch (e) {
       print('Error loading vault items: $e');
@@ -30,7 +30,7 @@ class VaultRepository {
 
   Future<VaultItem?> getItemById(String id) async {
     try {
-      final model = await _storage.getById<VaultItemModel>(vaultBox, id);
+      final model = await _storage.getById(vaultBox, id);
       return model?.toEntity();
     } catch (e) {
       print('Error getting vault item: $e');
@@ -129,7 +129,16 @@ class VaultRepository {
   Future<int> getTotalSize() async {
     try {
       final items = await getAllItems();
-      return items.fold(0, (sum, item) => sum + item.fileSize);
+      int totalSize = 0;
+      for (final item in items) {
+        final fileSize = item.fileSize;
+        if (fileSize is int) {
+          totalSize += fileSize;
+        } else if (fileSize is Future<int>) {
+          totalSize += await fileSize;
+        }
+      }
+      return totalSize;
     } catch (e) {
       print('Error calculating total size: $e');
       return 0;
