@@ -115,7 +115,8 @@ class VaultRepository {
       }
 
       // Save encrypted file with unique name
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}.enc';
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}.enc';
       final savedPath = path.join(vaultDir.path, fileName);
       await encryptedFile.copy(savedPath);
 
@@ -131,8 +132,10 @@ class VaultRepository {
       final items = await getAllItems();
       int totalSize = 0;
       for (final item in items) {
-        final fileSize = item.fileSize is Future ? await item.fileSize : item.fileSize;
-        totalSize += fileSize ?? 0;
+        // Skip folders (they have 0 size)
+        if (item.fileType != 'folder') {
+          totalSize += item.fileSize;
+        }
       }
       return totalSize;
     } catch (e) {
@@ -148,9 +151,11 @@ class VaultRepository {
       final totalSize = items.fold(0, (sum, item) => sum + item.fileSize);
       final images = items.where((i) => i.fileType.startsWith('image')).length;
       final videos = items.where((i) => i.fileType.startsWith('video')).length;
-      final documents = items.where(
-        (i) => i.fileType == 'application/pdf' || i.fileType == 'document',
-      ).length;
+      final documents = items
+          .where(
+            (i) => i.fileType == 'application/pdf' || i.fileType == 'document',
+          )
+          .length;
 
       return {
         'totalItems': totalItems,

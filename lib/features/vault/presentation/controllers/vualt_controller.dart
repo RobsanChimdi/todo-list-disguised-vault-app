@@ -4,9 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../core/services/media_service.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../../../core/services/media_service.dart';
 import '../../data/repositories/vault_repository.dart';
 import '../../domain/entities/vault_item.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 
 class VaultController extends GetxController {
   final VaultRepository _repository;
@@ -16,6 +18,9 @@ class VaultController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxString searchQuery = ''.obs;
   final RxString selectedFilter = 'all'.obs; // all, images, videos, documents
+  final RxMap<String, List<VaultItem>> folders =
+      <String, List<VaultItem>>{}.obs;
+  final RxString currentFolder = ''.obs;
 
   VaultController(this._repository);
 
@@ -29,6 +34,7 @@ class VaultController extends GetxController {
     try {
       isLoading.value = true;
       items.value = await _repository.getAllItems();
+      _organizeByFolders();
     } catch (e) {
       print('Error loading vault items: $e');
       Get.snackbar(
@@ -42,6 +48,36 @@ class VaultController extends GetxController {
     }
   }
 
+  void _organizeByFolders() {
+    final Map<String, List<VaultItem>> folderMap = {};
+    for (final item in items) {
+      final folder = item.metadata?['folder'] ?? 'root';
+      if (!folderMap.containsKey(folder)) {
+        folderMap[folder] = [];
+      }
+      folderMap[folder]!.add(item);
+    }
+    folders.value = folderMap;
+  }
+
+  // Get file type from path
+  String _getFileType(String path) {
+    final extension = path.split('.').last.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].contains(extension)) {
+      return 'image';
+    } else if (['mp4', 'mov', 'avi', 'mkv', 'wmv'].contains(extension)) {
+      return 'video';
+    } else if (['pdf'].contains(extension)) {
+      return 'application/pdf';
+    } else if (['doc', 'docx'].contains(extension)) {
+      return 'application/msword';
+    } else if (['txt'].contains(extension)) {
+      return 'text/plain';
+    } else {
+      return 'document';
+    }
+  }
+
   Future<void> addImage() async {
     try {
       final file = await _mediaService.pickImage();
@@ -50,6 +86,11 @@ class VaultController extends GetxController {
       }
     } catch (e) {
       print('Error picking image: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to pick image',
+        backgroundColor: Colors.red,
+      );
     }
   }
 
@@ -61,6 +102,11 @@ class VaultController extends GetxController {
       }
     } catch (e) {
       print('Error picking video: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to pick video',
+        backgroundColor: Colors.red,
+      );
     }
   }
 
@@ -68,10 +114,11 @@ class VaultController extends GetxController {
     try {
       final file = await _mediaService.pickFile();
       if (file != null) {
-        await _addFile(file, 'document');
+        await _addFile(file, _getFileType(file.path));
       }
     } catch (e) {
       print('Error picking file: $e');
+      Get.snackbar('Error', 'Failed to pick file', backgroundColor: Colors.red);
     }
   }
 
@@ -86,6 +133,9 @@ class VaultController extends GetxController {
         name: fileName,
         fileType: type,
         fileSize: fileSize,
+        metadata: {
+          'folder': currentFolder.value.isEmpty ? 'root' : currentFolder.value,
+        },
       );
 
       await _repository.addItem(item, file);
@@ -96,6 +146,7 @@ class VaultController extends GetxController {
         'File added to vault',
         backgroundColor: Colors.green,
         colorText: Colors.white,
+        duration: const Duration(seconds: 2),
       );
     } catch (e) {
       print('Error adding file: $e');
@@ -110,6 +161,215 @@ class VaultController extends GetxController {
     }
   }
 
+  // 1. Batch import
+  Future<void> batchImport(List<XFile> files) async {
+    if (files.isEmpty) return;
+
+    try {
+      isLoading.value = true;
+      int successCount = 0;
+      int failCount = 0;
+
+      for (final xfile in files) {
+        try {
+          final file = File(xfile.path);
+          final fileType = _getFileType(file.path);
+          await _addFile(file, fileType);
+          successCount++;
+        } catch (e) {
+          failCount++;
+          print('Error importing file: $e');
+        }
+      }
+
+      await loadItems();
+
+      Get.snackbar(
+        'Import Complete',
+        '$successCount files imported, $failCount failed',
+        backgroundColor: failCount > 0 ? Colors.orange : Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // 2. Create folders in vault
+  Future<void> createFolder(String folderName) async {
+    if (folderName.trim().isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Folder name cannot be empty',
+        backgroundColor: Colors.red,
+      );
+      return;
+    }
+
+    try {
+      // Create a special marker item for the folder
+      final folderItem = VaultItem.create(
+        name: folderName,
+        fileType: 'folder',
+        fileSize: 0,
+        metadata: {'isFolder': true, 'folder': 'root'},
+      );
+
+      await _repository.addItem(folderItem, File('')); // Empty file for folder
+      await loadItems();
+
+      Get.snackbar(
+        'Success',
+        'Folder "$folderName" created',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      print('Error creating folder: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to create folder',
+        backgroundColor: Colors.red,
+      );
+    }
+  }
+
+  // 3. Move files between folders
+  Future<void> moveItem(String itemId, String newFolderId) async {
+    try {
+      final item = await _repository.getItemById(itemId);
+      if (item == null) {
+        Get.snackbar('Error', 'Item not found', backgroundColor: Colors.red);
+        return;
+      }
+
+      final updatedItem = item.copyWith(
+        metadata: {
+          ...?item.metadata,
+          'folder': newFolderId == 'root' ? 'root' : newFolderId,
+        },
+      );
+
+      await _repository.updateItem(updatedItem);
+      await loadItems();
+
+      Get.snackbar(
+        'Success',
+        'Item moved',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 1),
+      );
+    } catch (e) {
+      print('Error moving item: $e');
+      Get.snackbar('Error', 'Failed to move item', backgroundColor: Colors.red);
+    }
+  }
+
+  // 4. Share files from vault (with decryption)
+  Future<void> shareItem(VaultItem item) async {
+    try {
+      isLoading.value = true;
+
+      final decryptedFile = await getDecryptedFile(item);
+      if (decryptedFile != null && await decryptedFile.exists()) {
+        await Share.shareXFiles([
+          XFile(decryptedFile.path),
+        ], text: 'Sharing ${item.name} from Secure Vault');
+
+        // Update last opened time
+        final updatedItem = item.copyWith(lastOpened: DateTime.now());
+        await _repository.updateItem(updatedItem);
+      } else {
+        Get.snackbar(
+          'Error',
+          'Unable to share file',
+          backgroundColor: Colors.red,
+        );
+      }
+    } catch (e) {
+      print('Error sharing item: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to share file',
+        backgroundColor: Colors.red,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // 5. Secure note taking inside vault
+  Future<void> createSecureNote(String title, String content) async {
+    if (title.trim().isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Title cannot be empty',
+        backgroundColor: Colors.red,
+      );
+      return;
+    }
+
+    try {
+      isLoading.value = true;
+
+      // Create a temporary file with the note content
+      final tempDir = await Directory.systemTemp.createTemp('vault_note_');
+      final noteFile = File('${tempDir.path}/$title.txt');
+      await noteFile.writeAsString(content);
+
+      final fileSize = await noteFile.length();
+
+      final noteItem = VaultItem.create(
+        name: '$title.txt',
+        fileType: 'text/plain',
+        fileSize: fileSize,
+        metadata: {
+          'isNote': true,
+          'noteTitle': title,
+          'noteContent': content,
+          'folder': currentFolder.value.isEmpty ? 'notes' : currentFolder.value,
+        },
+      );
+
+      await _repository.addItem(noteItem, noteFile);
+      await loadItems();
+
+      // Clean up temp file
+      await noteFile.delete();
+      await tempDir.delete();
+
+      Get.snackbar(
+        'Success',
+        'Secure note created',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      print('Error creating secure note: $e');
+      Get.snackbar(
+        'Error',
+        'Failed to create secure note',
+        backgroundColor: Colors.red,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Navigate to folder
+  void navigateToFolder(String folderName) {
+    currentFolder.value = folderName;
+    loadItems();
+  }
+
+  // Go back to root
+  void goToRoot() {
+    currentFolder.value = '';
+    loadItems();
+  }
+
   Future<void> deleteItem(VaultItem item) async {
     try {
       isLoading.value = true;
@@ -121,6 +381,7 @@ class VaultController extends GetxController {
         '${item.name} removed from vault',
         backgroundColor: Colors.red,
         colorText: Colors.white,
+        duration: const Duration(seconds: 2),
       );
     } catch (e) {
       print('Error deleting item: $e');
@@ -146,6 +407,14 @@ class VaultController extends GetxController {
 
   List<VaultItem> getFilteredItems() {
     var filtered = items.where((item) {
+      // Filter by folder
+      final itemFolder = item.metadata?['folder'] ?? 'root';
+      final targetFolder = currentFolder.value.isEmpty
+          ? 'root'
+          : currentFolder.value;
+      if (itemFolder != targetFolder) return false;
+
+      // Filter by search query
       if (searchQuery.value.isNotEmpty) {
         return item.name.toLowerCase().contains(
           searchQuery.value.toLowerCase(),
@@ -154,23 +423,39 @@ class VaultController extends GetxController {
       return true;
     }).toList();
 
-    // Apply type filter
+    // Apply type filter (skip for folders)
     if (selectedFilter.value != 'all') {
       filtered = filtered.where((item) {
+        // Don't filter folders
+        if (item.fileType == 'folder') return true;
+
         switch (selectedFilter.value) {
           case 'images':
             return item.fileType == 'image';
           case 'videos':
             return item.fileType == 'video';
           case 'documents':
-            return item.fileType == 'document';
+            return item.fileType == 'document' ||
+                item.fileType == 'application/pdf' ||
+                item.fileType == 'text/plain';
           default:
             return true;
         }
       }).toList();
     }
 
+    // Sort: folders first, then by date
+    filtered.sort((a, b) {
+      if (a.fileType == 'folder' && b.fileType != 'folder') return -1;
+      if (a.fileType != 'folder' && b.fileType == 'folder') return 1;
+      return b.createdAt.compareTo(a.createdAt);
+    });
+
     return filtered;
+  }
+
+  List<VaultItem> getFolders() {
+    return items.where((item) => item.fileType == 'folder').toList();
   }
 
   void setFilter(String filter) {
@@ -192,35 +477,4 @@ class VaultController extends GetxController {
   void logout() {
     Get.find<AuthController>().logoutFromVault();
   }
-}
-// Add to vault_controller.dart
-
-// 1. Batch import
-Future<void> batchImport(List<XFile> files) async {
-  for (var file in files) {
-    await _addFile(File(file.path), _getFileType(file.path));
-  }
-}
-
-// 2. Create folders in vault
-Future<void> createFolder(String folderName) async {
-  // Implementation for folder organization
-}
-
-// 3. Move files between folders
-Future<void> moveItem(String itemId, String newFolderId) async {
-  // Implementation for moving files
-}
-
-// 4. Share files from vault (with decryption)
-Future<void> shareItem(VaultItem item) async {
-  final decryptedFile = await getDecryptedFile(item);
-  if (decryptedFile != null) {
-    // Share implementation using share_plus package
-  }
-}
-
-// 5. Secure note taking inside vault
-Future<void> createSecureNote(String title, String content) async {
-  // Create encrypted text notes inside vault
 }
