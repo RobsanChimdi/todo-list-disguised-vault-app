@@ -3,22 +3,28 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../domain/entities/vault_item.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/media_service.dart';
 
 class VaultItemCard extends StatelessWidget {
   final VaultItem item;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final VoidCallback? onShare;
 
   const VaultItemCard({
     Key? key,
     required this.item,
     required this.onTap,
     required this.onDelete,
+    this.onShare,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final MediaService mediaService = MediaService();
+    final isFolder = item.fileType == 'folder';
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -35,12 +41,24 @@ class VaultItemCard extends StatelessWidget {
                   height: 120,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: isFolder
+                        ? Colors.blue.shade50
+                        : mediaService.getFileColor(item.name).withOpacity(0.1),
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(12),
                     ),
                   ),
-                  child: _buildThumbnail(),
+                  child: Center(
+                    child: Icon(
+                      isFolder
+                          ? Icons.folder
+                          : mediaService.getFileIcon(item.name),
+                      size: 48,
+                      color: isFolder
+                          ? Colors.blue.shade700
+                          : mediaService.getFileColor(item.name),
+                    ),
+                  ),
                 ),
 
                 // Info
@@ -59,10 +77,15 @@ class VaultItemCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _formatFileSize(item.fileSize),
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                      ),
+                      if (!isFolder) ...[
+                        Text(
+                          _formatFileSize(item.fileSize),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
                       Text(
                         DateFormat('MMM dd, yyyy').format(item.createdAt),
                         style: TextStyle(fontSize: 10, color: Colors.grey[500]),
@@ -73,7 +96,7 @@ class VaultItemCard extends StatelessWidget {
               ],
             ),
 
-            // Delete button
+            // Delete button (only for non-folders or show for folders too)
             Positioned(
               top: 8,
               right: 8,
@@ -93,42 +116,31 @@ class VaultItemCard extends StatelessWidget {
                 ),
               ),
             ),
+
+            // Share button (only for non-folders)
+            if (!isFolder && onShare != null)
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: onShare,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.share,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildThumbnail() {
-    if (item.thumbnailPath != null) {
-      return Image.asset(
-        item.thumbnailPath!,
-        fit: BoxFit.cover,
-        width: double.infinity,
-      );
-    }
-
-    // Default icons based on file type
-    IconData icon;
-    Color color;
-
-    switch (item.fileType) {
-      case 'image':
-        icon = Icons.image;
-        color = Colors.blue;
-        break;
-      case 'video':
-        icon = Icons.videocam;
-        color = Colors.red;
-        break;
-      default:
-        icon = Icons.insert_drive_file;
-        color = Colors.green;
-    }
-
-    return Container(
-      color: color.withOpacity(0.1),
-      child: Icon(icon, size: 48, color: color),
     );
   }
 

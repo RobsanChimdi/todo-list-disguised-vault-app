@@ -71,7 +71,7 @@ class VaultController extends GetxController {
       return 'application/pdf';
     } else if (['doc', 'docx'].contains(extension)) {
       return 'application/msword';
-    } else if (['txt'].contains(extension)) {
+    } else if (['txt', 'md'].contains(extension)) {
       return 'text/plain';
     } else {
       return 'document';
@@ -90,6 +90,7 @@ class VaultController extends GetxController {
         'Error',
         'Failed to pick image',
         backgroundColor: Colors.red,
+        colorText: Colors.white,
       );
     }
   }
@@ -106,6 +107,7 @@ class VaultController extends GetxController {
         'Error',
         'Failed to pick video',
         backgroundColor: Colors.red,
+        colorText: Colors.white,
       );
     }
   }
@@ -118,7 +120,12 @@ class VaultController extends GetxController {
       }
     } catch (e) {
       print('Error picking file: $e');
-      Get.snackbar('Error', 'Failed to pick file', backgroundColor: Colors.red);
+      Get.snackbar(
+        'Error',
+        'Failed to pick file',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     }
   }
 
@@ -203,6 +210,7 @@ class VaultController extends GetxController {
         'Error',
         'Folder name cannot be empty',
         backgroundColor: Colors.red,
+        colorText: Colors.white,
       );
       return;
     }
@@ -216,8 +224,17 @@ class VaultController extends GetxController {
         metadata: {'isFolder': true, 'folder': 'root'},
       );
 
-      await _repository.addItem(folderItem, File('')); // Empty file for folder
+      // Create an empty temporary file for the folder
+      final tempDir = await Directory.systemTemp.createTemp('folder_');
+      final emptyFile = File('${tempDir.path}/.folder');
+      await emptyFile.writeAsString('');
+
+      await _repository.addItem(folderItem, emptyFile);
       await loadItems();
+
+      // Clean up temp file
+      await emptyFile.delete();
+      await tempDir.delete();
 
       Get.snackbar(
         'Success',
@@ -231,6 +248,7 @@ class VaultController extends GetxController {
         'Error',
         'Failed to create folder',
         backgroundColor: Colors.red,
+        colorText: Colors.white,
       );
     }
   }
@@ -240,7 +258,12 @@ class VaultController extends GetxController {
     try {
       final item = await _repository.getItemById(itemId);
       if (item == null) {
-        Get.snackbar('Error', 'Item not found', backgroundColor: Colors.red);
+        Get.snackbar(
+          'Error',
+          'Item not found',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
         return;
       }
 
@@ -263,7 +286,12 @@ class VaultController extends GetxController {
       );
     } catch (e) {
       print('Error moving item: $e');
-      Get.snackbar('Error', 'Failed to move item', backgroundColor: Colors.red);
+      Get.snackbar(
+        'Error',
+        'Failed to move item',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     }
   }
 
@@ -286,6 +314,7 @@ class VaultController extends GetxController {
           'Error',
           'Unable to share file',
           backgroundColor: Colors.red,
+          colorText: Colors.white,
         );
       }
     } catch (e) {
@@ -294,6 +323,7 @@ class VaultController extends GetxController {
         'Error',
         'Failed to share file',
         backgroundColor: Colors.red,
+        colorText: Colors.white,
       );
     } finally {
       isLoading.value = false;
@@ -307,6 +337,7 @@ class VaultController extends GetxController {
         'Error',
         'Title cannot be empty',
         backgroundColor: Colors.red,
+        colorText: Colors.white,
       );
       return;
     }
@@ -316,13 +347,14 @@ class VaultController extends GetxController {
 
       // Create a temporary file with the note content
       final tempDir = await Directory.systemTemp.createTemp('vault_note_');
-      final noteFile = File('${tempDir.path}/$title.txt');
+      final safeTitle = title.replaceAll(RegExp(r'[\\/*?:"<>|]'), '_');
+      final noteFile = File('${tempDir.path}/$safeTitle.txt');
       await noteFile.writeAsString(content);
 
       final fileSize = await noteFile.length();
 
       final noteItem = VaultItem.create(
-        name: '$title.txt',
+        name: '$safeTitle.txt',
         fileType: 'text/plain',
         fileSize: fileSize,
         metadata: {
@@ -352,6 +384,7 @@ class VaultController extends GetxController {
         'Error',
         'Failed to create secure note',
         backgroundColor: Colors.red,
+        colorText: Colors.white,
       );
     } finally {
       isLoading.value = false;
