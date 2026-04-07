@@ -1,8 +1,3 @@
-// lib/features/vault/presentation/screens/file_viewer_screen.dart
-
-// Remove the pdf_viewer_plugin import and use a simpler approach
-// For PDFs, you can use open_file or native_view
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';

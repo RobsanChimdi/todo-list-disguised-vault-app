@@ -1,4 +1,4 @@
-// lib/app.dart
+// lib/app.dart (Improved version with proper dependency order)
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -6,10 +6,11 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'features/auth/presentation/controllers/auth_controller.dart';
 import 'features/disguise/controllers/disguise_controller.dart';
 import 'features/notebook/presentation/controllers/note_controller.dart';
-import 'features/vault/presentation/controllers/vault_controller.dart';
+import 'features/vault/presentation/controllers/vualt_controller.dart';
+import 'features/notebook/data/repositories/note_repository.dart';
+import 'features/vault/data/repositories/vault_repository.dart';
 import 'core/services/local_storage_service.dart';
 import 'core/services/secure_storage_service.dart';
-import 'core/constants/app_colors.dart';
 import 'core/constants/app_strings.dart';
 import 'config/theme.dart';
 import 'routes/app_routes.dart';
@@ -25,7 +26,7 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      initialRoute: AppRoutes.notebook, // Start with notebook directly
+      initialRoute: AppRoutes.notebook,
       getPages: AppRoutes.routes,
       defaultTransition: Transition.fade,
       transitionDuration: const Duration(milliseconds: 300),
@@ -33,7 +34,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Root widget that handles app initialization
 class AppRoot extends StatefulWidget {
   const AppRoot({Key? key}) : super(key: key);
 
@@ -52,26 +52,44 @@ class _AppRootState extends State<AppRoot> {
 
   Future<void> _initializeApp() async {
     try {
-      // Initialize Hive
+      // Step 1: Initialize Hive
       await Hive.initFlutter();
-
-      // Initialize services
-      await Get.putAsync<LocalStorageService>(
-        () async => LocalStorageService(),
-      );
-      await Get.putAsync<SecureStorageService>(
-        () async => SecureStorageService(),
-      );
-
-      // Initialize controllers but don't authenticate yet
-      Get.put(AuthController());
-      Get.put(DisguiseController());
-      Get.put(NoteController());
-      Get.put(VaultController());
-
+      
+      // Step 2: Initialize and register LocalStorageService
+      final localStorage = LocalStorageService();
+      await localStorage.init();
+      Get.put<LocalStorageService>(localStorage);
+      
+      // Step 3: Initialize SecureStorageService
+      final secureStorage = SecureStorageService();
+      Get.put<SecureStorageService>(secureStorage);
+      
+      // Step 4: Initialize repositories
+      final noteRepository = NoteRepository(localStorage);
+      final vaultRepository = VaultRepository(localStorage);
+      
+      // Step 5: Initialize controllers (order matters if they depend on each other)
+      // AuthController doesn't depend on others
+      Get.put<AuthController>(AuthController());
+      
+      // DisguiseController depends on LocalStorageService
+      Get.put<DisguiseController>(DisguiseController());
+      
+      // NoteController depends on NoteRepository
+      Get.put<NoteController>(NoteController(noteRepository));
+      
+      // VaultController depends on VaultRepository
+      Get.put<VaultController>(VaultController(vaultRepository));
+      
+      // Step 6: Load initial data
+      await Get.find<NoteController>().loadNotes();
+      await Get.find<VaultController>().loadItems();
+      
       setState(() {
         _isInitialized = true;
       });
+      
+      debugPrint('App initialized successfully');
     } catch (e) {
       debugPrint('Error initializing app: $e');
       _showInitializationError();
@@ -84,7 +102,14 @@ class _AppRootState extends State<AppRoot> {
         title: const Text('Initialization Error'),
         content: const Text('Failed to initialize the app. Please restart.'),
         actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Close')),
+          TextButton(
+            onPressed: () {
+              Get.back();
+              // Optionally exit the app
+              // SystemNavigator.pop();
+            },
+            child: const Text('Close'),
+          ),
         ],
       ),
       barrierDismissible: false,
@@ -94,7 +119,24 @@ class _AppRootState extends State<AppRoot> {
   @override
   Widget build(BuildContext context) {
     if (!_isInitialized) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text(
+                  'Initializing secure vault...',
+                  style: TextStyle(fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     return const MyApp();
