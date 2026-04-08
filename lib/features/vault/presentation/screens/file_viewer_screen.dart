@@ -1,17 +1,15 @@
+// lib/features/vault/presentation/screens/file_viewer_screen.dart
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
-import '../../domain/entities/vault_item.dart';
 import 'package:open_file/open_file.dart';
+import '../../domain/entities/vault_item.dart';
 import '../../../../core/constants/app_colors.dart';
 
 class FileViewerScreen extends StatefulWidget {
-  final File file;
-  final VaultItem item;
-
-  const FileViewerScreen({Key? key, required this.file, required this.item})
-    : super(key: key);
+  const FileViewerScreen({Key? key}) : super(key: key);
 
   @override
   State<FileViewerScreen> createState() => _FileViewerScreenState();
@@ -21,15 +19,34 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   late VideoPlayerController _videoController;
   bool _isVideoInitialized = false;
 
+  late File _file;
+  late VaultItem _item;
+
   @override
   void initState() {
     super.initState();
+    _getArguments();
     _initializeViewer();
   }
 
+  void _getArguments() {
+    final arguments = Get.arguments;
+    if (arguments is Map) {
+      final filePath = arguments['path'] as String?;
+      final itemData = arguments['item'] as VaultItem?;
+
+      if (filePath != null) {
+        _file = File(filePath);
+      }
+      if (itemData != null) {
+        _item = itemData;
+      }
+    }
+  }
+
   void _initializeViewer() {
-    if (widget.item.fileType == 'video') {
-      _videoController = VideoPlayerController.file(widget.file);
+    if (_item.fileType == 'video') {
+      _videoController = VideoPlayerController.file(_file);
       _videoController.initialize().then((_) {
         setState(() {
           _isVideoInitialized = true;
@@ -41,12 +58,12 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
 
   @override
   void dispose() {
-    if (widget.item.fileType == 'video') {
+    if (_item.fileType == 'video') {
       _videoController.dispose();
     }
     // Delete temporary decrypted file after a delay
     Future.delayed(const Duration(seconds: 5), () {
-      widget.file.delete();
+      _file.delete();
     });
     super.dispose();
   }
@@ -55,7 +72,7 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.item.name),
+        title: Text(_item.name),
         backgroundColor: Colors.black,
         elevation: 0,
         actions: [
@@ -70,27 +87,22 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   }
 
   Future<void> _shareFile() async {
-    // Implement sharing
     Get.snackbar('Share', 'Sharing files coming soon');
   }
 
   Widget _buildViewer() {
-    final extension = widget.item.name.split('.').last.toLowerCase();
+    final extension = _item.name.split('.').last.toLowerCase();
 
-    if (widget.item.fileType == 'image' ||
+    if (_item.fileType == 'image' ||
         ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension)) {
       return InteractiveViewer(
         minScale: 0.5,
         maxScale: 4.0,
-        child: Image.file(
-          widget.file,
-          fit: BoxFit.contain,
-          width: double.infinity,
-        ),
+        child: Image.file(_file, fit: BoxFit.contain, width: double.infinity),
       );
     }
 
-    if (widget.item.fileType == 'video') {
+    if (_item.fileType == 'video') {
       if (_isVideoInitialized) {
         return Column(
           children: [
@@ -152,13 +164,13 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'File type: ${widget.item.fileType}',
+            'File type: ${_item.fileType}',
             style: TextStyle(fontSize: 14, color: Colors.grey[500]),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () {
-              OpenFile.open(widget.file.path);
+              OpenFile.open(_file.path);
             },
             icon: const Icon(Icons.open_in_new),
             label: const Text('Open with External App'),

@@ -2,11 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../controllers/vualt_controller.dart';
+import '../controllers/vault_controller.dart';
 import '../widgets/vault_item_card.dart';
 import 'file_viewer_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
+import '../../../../routes/app_routes.dart';
+import '../../../../core/services/local_storage_service.dart';
+import '../../data/repositories/vault_repository.dart';
 
 class VaultHomeScreen extends StatelessWidget {
   const VaultHomeScreen({Key? key}) : super(key: key);
@@ -14,7 +17,6 @@ class VaultHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final VaultController controller = Get.find<VaultController>();
-
     return Scaffold(
       appBar: _buildAppBar(controller),
       body: Obx(() {
@@ -144,14 +146,19 @@ class VaultHomeScreen extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = items[index];
         return VaultItemCard(
-          item: item,
+          item: item, // In vault_home_screen.dart, update the onTap method:
+
           onTap: () async {
             if (item.fileType == 'folder') {
               controller.navigateToFolder(item.name);
             } else {
               final file = await controller.getDecryptedFile(item);
               if (file != null) {
-                Get.to(() => FileViewerScreen(file: file, item: item));
+                // Pass both file path and item
+                Get.toNamed(
+                  AppRoutes.fileViewer,
+                  arguments: {'path': file.path, 'item': item},
+                );
               }
             }
           },

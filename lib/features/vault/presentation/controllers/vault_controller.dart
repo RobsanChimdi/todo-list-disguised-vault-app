@@ -36,7 +36,7 @@ class VaultController extends GetxController {
       items.value = await _repository.getAllItems();
       _organizeByFolders();
     } catch (e) {
-      print('Error loading vault items: $e');
+      debugPrint('Error loading vault items: $e');
       Get.snackbar(
         'Error',
         'Failed to load vault items',
@@ -85,7 +85,7 @@ class VaultController extends GetxController {
         await _addFile(file, 'image');
       }
     } catch (e) {
-      print('Error picking image: $e');
+      debugPrint('Error picking image: $e');
       Get.snackbar(
         'Error',
         'Failed to pick image',
@@ -102,7 +102,7 @@ class VaultController extends GetxController {
         await _addFile(file, 'video');
       }
     } catch (e) {
-      print('Error picking video: $e');
+      debugPrint('Error picking video: $e');
       Get.snackbar(
         'Error',
         'Failed to pick video',
@@ -112,6 +112,11 @@ class VaultController extends GetxController {
     }
   }
 
+  // Public method for adding files (used by UploadScreen)
+  Future<void> addFileToVault(File file, String type) async {
+    await _addFile(file, type);
+  }
+
   Future<void> addFile() async {
     try {
       final file = await _mediaService.pickFile();
@@ -119,7 +124,7 @@ class VaultController extends GetxController {
         await _addFile(file, _getFileType(file.path));
       }
     } catch (e) {
-      print('Error picking file: $e');
+      debugPrint('Error picking file: $e');
       Get.snackbar(
         'Error',
         'Failed to pick file',
@@ -156,7 +161,7 @@ class VaultController extends GetxController {
         duration: const Duration(seconds: 2),
       );
     } catch (e) {
-      print('Error adding file: $e');
+      debugPrint('Error adding file: $e');
       Get.snackbar(
         'Error',
         'Failed to add file to vault',
@@ -185,7 +190,7 @@ class VaultController extends GetxController {
           successCount++;
         } catch (e) {
           failCount++;
-          print('Error importing file: $e');
+          debugPrint('Error importing file: $e');
         }
       }
 
@@ -243,7 +248,7 @@ class VaultController extends GetxController {
         colorText: Colors.white,
       );
     } catch (e) {
-      print('Error creating folder: $e');
+      debugPrint('Error creating folder: $e');
       Get.snackbar(
         'Error',
         'Failed to create folder',
@@ -285,7 +290,7 @@ class VaultController extends GetxController {
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
-      print('Error moving item: $e');
+      debugPrint('Error moving item: $e');
       Get.snackbar(
         'Error',
         'Failed to move item',
@@ -318,7 +323,7 @@ class VaultController extends GetxController {
         );
       }
     } catch (e) {
-      print('Error sharing item: $e');
+      debugPrint('Error sharing item: $e');
       Get.snackbar(
         'Error',
         'Failed to share file',
@@ -379,7 +384,7 @@ class VaultController extends GetxController {
         colorText: Colors.white,
       );
     } catch (e) {
-      print('Error creating secure note: $e');
+      debugPrint('Error creating secure note: $e');
       Get.snackbar(
         'Error',
         'Failed to create secure note',
@@ -417,7 +422,7 @@ class VaultController extends GetxController {
         duration: const Duration(seconds: 2),
       );
     } catch (e) {
-      print('Error deleting item: $e');
+      debugPrint('Error deleting item: $e');
       Get.snackbar(
         'Error',
         'Failed to delete item',
@@ -433,7 +438,7 @@ class VaultController extends GetxController {
     try {
       return await _repository.getDecryptedFile(item);
     } catch (e) {
-      print('Error getting decrypted file: $e');
+      debugPrint('Error getting decrypted file: $e');
       return null;
     }
   }
