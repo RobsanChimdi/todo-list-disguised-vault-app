@@ -1,4 +1,4 @@
-// lib/features/vault/data/models/vault_item_model.dart
+// lib/features/vault/data/models/vault_item_model.dart (add adapter)
 
 import 'package:hive/hive.dart';
 import '../../domain/entities/vault_item.dart';
@@ -76,5 +76,46 @@ class VaultItemModel extends HiveObject {
       thumbnailPath: thumbnailPath,
       metadata: metadata,
     );
+  }
+}
+
+// Add this adapter class at the end of the file
+class VaultItemModelAdapter extends TypeAdapter<VaultItemModel> {
+  @override
+  final int typeId = 1;
+
+  @override
+  VaultItemModel read(BinaryReader reader) {
+    return VaultItemModel(
+      id: reader.readString(),
+      name: reader.readString(),
+      filePath: reader.readString(),
+      fileType: reader.readString(),
+      fileSize: reader.readInt(),
+      createdAt: DateTime.parse(reader.readString()),
+      lastOpened: reader.readBool()
+          ? DateTime.parse(reader.readString())
+          : null,
+      isEncrypted: reader.readBool(),
+      thumbnailPath: reader.readString(),
+      metadata: reader.read() as Map<String, dynamic>?,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, VaultItemModel obj) {
+    writer.writeString(obj.id);
+    writer.writeString(obj.name);
+    writer.writeString(obj.filePath ?? '');
+    writer.writeString(obj.fileType);
+    writer.writeInt(obj.fileSize);
+    writer.writeString(obj.createdAt.toIso8601String());
+    writer.writeBool(obj.lastOpened != null);
+    if (obj.lastOpened != null) {
+      writer.writeString(obj.lastOpened!.toIso8601String());
+    }
+    writer.writeBool(obj.isEncrypted);
+    writer.writeString(obj.thumbnailPath ?? '');
+    writer.write(obj.metadata);
   }
 }

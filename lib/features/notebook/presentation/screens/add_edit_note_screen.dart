@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import '../../data/models/note_model.dart';
-import '../../../disguise/services/secret_note_service.dart';
 
 class AddEditNoteScreen extends StatefulWidget {
   final Note? note;
@@ -24,7 +23,6 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
   Color _selectedColor = Colors.white;
   bool _isFavorite = false;
   bool _isEditing = false;
-  bool _isSecretTrigger = false; // Add this
 
   final List<ColorOption> _colorOptions = [
     ColorOption(name: 'Default', color: Colors.white, value: null),
@@ -45,12 +43,11 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
 
     if (_isEditing) {
       _titleController.text = widget.note!.title;
-      _contentController.text = widget.note!.content ?? '';
-      _tags = widget.note!.tags ?? [];
+      _contentController.text = widget.note!.content;
+      _tags = List.from(widget.note!.tags);
       _isFavorite = widget.note!.isFavorite;
-      _isSecretTrigger = widget.note!.isSecretTrigger; // Load secret flag
 
-      if (widget.note!.backgroundColor != null) {
+      if (widget.note!.backgroundColor != 0xFFFFFFFF) {
         final colorOption = _colorOptions.firstWhere(
           (option) => option.value == widget.note!.backgroundColor,
           orElse: () => _colorOptions.first,
@@ -61,45 +58,16 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
 
     _contentController.addListener(_updateWordCount);
     _updateWordCount();
-
-    // Auto-detect secret trigger when title changes
-    _titleController.addListener(_autoDetectSecret);
-  }
-
-  void _autoDetectSecret() {
-    if (!_isEditing && _titleController.text.isNotEmpty) {
-      final shouldBeSecret = SecretNoteService.isSecretTrigger(
-        _titleController.text,
-      );
-      if (shouldBeSecret != _isSecretTrigger) {
-        setState(() {
-          _isSecretTrigger = shouldBeSecret;
-        });
-        if (shouldBeSecret) {
-          _showAutoSecretDetected();
-        }
-      }
-    }
-  }
-
-  void _showAutoSecretDetected() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🔒 Secret note detected! This note will be locked.'),
-        backgroundColor: Colors.orange,
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 
   @override
   void dispose() {
+    _contentController.removeListener(_updateWordCount);
     _titleController.dispose();
     _contentController.dispose();
     _tagController.dispose();
     _titleFocusNode.dispose();
     _contentFocusNode.dispose();
-    _titleController.removeListener(_autoDetectSecret);
     super.dispose();
   }
 
@@ -146,7 +114,6 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
         isFavorite: _isFavorite,
         tags: _tags,
         backgroundColor: _getSelectedColorValue(),
-        isSecretTrigger: _isSecretTrigger,
       );
     } else {
       note =
@@ -154,7 +121,6 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
             title: _titleController.text.trim(),
             content: _contentController.text.trim(),
             tags: _tags,
-            isSecretTrigger: _isSecretTrigger,
           ).copyWith(
             isFavorite: _isFavorite,
             backgroundColor: _getSelectedColorValue(),
@@ -271,7 +237,6 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title field
           TextField(
             controller: _titleController,
             focusNode: _titleFocusNode,
@@ -293,8 +258,6 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
             ),
             maxLines: null,
           ),
-
-          // Word count and metadata
           Padding(
             padding: EdgeInsets.only(left: 4, bottom: 12),
             child: Row(
@@ -320,11 +283,8 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
               ],
             ),
           ),
-
           Divider(color: Colors.grey[300]),
           SizedBox(height: 16),
-
-          // Content field
           TextField(
             controller: _contentController,
             focusNode: _contentFocusNode,
@@ -338,22 +298,12 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
             ),
             maxLines: null,
           ),
-
           SizedBox(height: 24),
-
-          // Secret Trigger Section (NEW)
-          _buildSecretTriggerSection(),
-          SizedBox(height: 24),
-
-          // Tags section
           _buildTagsSection(),
           SizedBox(height: 24),
-
-          // Color section
           _buildColorSection(),
           SizedBox(height: 24),
-
-          if (_isEditing && widget.note!.createdAt != null)
+          if (_isEditing)
             Padding(
               padding: EdgeInsets.only(top: 16),
               child: Text(
@@ -365,69 +315,6 @@ class _AddEditNoteScreenState extends State<AddEditNoteScreen> {
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSecretTriggerSection() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _isSecretTrigger ? Colors.orange.shade50 : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _isSecretTrigger
-              ? Colors.orange.shade200
-              : Colors.grey.shade200,
-        ),
-      ),
-      child: SwitchListTile(
-        title: Text(
-          'Lock this note',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: _isSecretTrigger ? Colors.orange.shade700 : null,
-          ),
-        ),
-        subtitle: Text(
-          _isSecretTrigger
-              ? 'PIN required to open this note'
-              : 'Require authentication to view this note',
-          style: TextStyle(
-            fontSize: 12,
-            color: _isSecretTrigger ? Colors.orange.shade600 : Colors.grey[600],
-          ),
-        ),
-        value: _isSecretTrigger,
-        onChanged: (value) {
-          setState(() {
-            _isSecretTrigger = value;
-          });
-          if (value) {
-            _showSecretNoteWarning();
-          }
-        },
-        activeColor: Colors.orange,
-        activeTrackColor: Colors.orange.shade100,
-      ),
-    );
-  }
-
-  void _showSecretNoteWarning() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Lock Note'),
-        content: const Text(
-          'Locked notes require PIN authentication to open. '
-          'This is useful for sensitive information. '
-          'Make sure you remember your PIN!',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
         ],
       ),
     );

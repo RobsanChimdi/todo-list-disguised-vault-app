@@ -8,8 +8,6 @@ import 'file_viewer_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../routes/app_routes.dart';
-import '../../../../core/services/local_storage_service.dart';
-import '../../data/repositories/vault_repository.dart';
 
 class VaultHomeScreen extends StatelessWidget {
   const VaultHomeScreen({Key? key}) : super(key: key);
@@ -17,21 +15,10 @@ class VaultHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final VaultController controller = Get.find<VaultController>();
+
     return Scaffold(
       appBar: _buildAppBar(controller),
-      body: Obx(() {
-        if (controller.isLoading.value && controller.items.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final items = controller.getFilteredItems();
-
-        if (items.isEmpty) {
-          return _buildEmptyState(controller);
-        }
-
-        return _buildItemGrid(items, controller);
-      }),
+      body: _buildBody(controller),
       floatingActionButton: _buildFloatingActionButton(controller),
     );
   }
@@ -54,7 +41,7 @@ class VaultHomeScreen extends StatelessWidget {
             onPressed: () => controller.goToRoot(),
           );
         }
-        return const SizedBox.shrink(); // Return empty widget instead of null
+        return const SizedBox.shrink();
       }),
       actions: [
         IconButton(
@@ -87,6 +74,23 @@ class VaultHomeScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildBody(VaultController controller) {
+    // Use Obx only around the content that depends on observables
+    return Obx(() {
+      if (controller.isLoading.value && controller.items.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+
+      final items = controller.getFilteredItems();
+
+      if (items.isEmpty) {
+        return _buildEmptyState(controller);
+      }
+
+      return _buildItemGrid(items, controller);
+    });
   }
 
   Widget _buildEmptyState(VaultController controller) {
@@ -146,15 +150,13 @@ class VaultHomeScreen extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = items[index];
         return VaultItemCard(
-          item: item, // In vault_home_screen.dart, update the onTap method:
-
+          item: item,
           onTap: () async {
             if (item.fileType == 'folder') {
               controller.navigateToFolder(item.name);
             } else {
               final file = await controller.getDecryptedFile(item);
               if (file != null) {
-                // Pass both file path and item
                 Get.toNamed(
                   AppRoutes.fileViewer,
                   arguments: {'path': file.path, 'item': item},

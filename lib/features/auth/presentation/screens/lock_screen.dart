@@ -3,8 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
+import '../../../vault/presentation/screens/vault_home_screen.dart';
+import 'set_pin_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
+import '../../../../core/widgets/custom_button.dart';
 
 class LockScreen extends StatefulWidget {
   const LockScreen({Key? key}) : super(key: key);
@@ -15,16 +18,22 @@ class LockScreen extends StatefulWidget {
 
 class _LockScreenState extends State<LockScreen>
     with SingleTickerProviderStateMixin {
-  final AuthController _authController = Get.find<AuthController>();
-  final TextEditingController _pinController = TextEditingController();
+  late final AuthController _authController;
   final RxString _enteredPin = ''.obs;
   final RxString _errorMessage = ''.obs;
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
 
+  final RxBool _isLoading = false.obs;
+
   @override
   void initState() {
     super.initState();
+    // Ensure AuthController is registered
+    _authController = Get.isRegistered<AuthController>()
+        ? Get.find<AuthController>()
+        : Get.put(AuthController());
+
     _shakeController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
@@ -32,11 +41,13 @@ class _LockScreenState extends State<LockScreen>
     _shakeAnimation = Tween<double>(begin: 0, end: 10).animate(
       CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
     );
+
+    // Check if PIN exists, if not, redirect to SetPinScreen
+    _checkPinAndRedirect();
   }
 
   @override
   void dispose() {
-    _pinController.dispose();
     _shakeController.dispose();
     super.dispose();
   }
@@ -50,8 +61,30 @@ class _LockScreenState extends State<LockScreen>
     });
   }
 
+  void _checkPinAndRedirect() {
+    // Wait a moment for the UI to load
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (!_authController.hasPin.value && mounted) {
+        // No PIN exists - redirect to SetPinScreen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const SetPinScreen()),
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    // If no PIN exists, show loading or redirect (handled in initState)
+    if (!_authController.hasPin.value) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // PIN exists - show normal lock screen
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -133,8 +166,7 @@ class _LockScreenState extends State<LockScreen>
                         // Cancel button
                         TextButton(
                           onPressed: () {
-                            _authController.showVaultAccess.value = false;
-                            Get.back();
+                            Navigator.pop(context);
                           },
                           child: const Text(
                             'Cancel',
@@ -176,7 +208,7 @@ class _LockScreenState extends State<LockScreen>
               ),
 
               // Loading overlay
-              if (_authController.isLoading.value)
+              if (_authController.isLoading.value || _isLoading.value)
                 Container(
                   color: Colors.black.withOpacity(0.5),
                   child: const Center(child: CircularProgressIndicator()),
@@ -322,11 +354,14 @@ class _LockScreenState extends State<LockScreen>
   }
 
   Future<void> _submitPin() async {
-    final isValid = await _authController.verifyPinForVault(_enteredPin.value);
+    final isValid = await _authController.verifyPin(_enteredPin.value);
 
     if (isValid) {
-      // Success - auth controller will handle navigation
-      _enteredPin.value = '';
+      // Success - navigate to vault
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const VaultHomeScreen()),
+      );
     } else {
       // Failed
       _enteredPin.value = '';

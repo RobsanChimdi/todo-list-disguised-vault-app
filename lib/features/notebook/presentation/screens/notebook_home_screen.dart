@@ -15,7 +15,6 @@ import '../widgets/confirmation_dialog.dart';
 import '../widgets/note_list_item.dart';
 import '../../../../core/services/local_storage_service.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
-import '../../../disguise/services/secret_note_service.dart';
 
 class NotebookHomeScreen extends StatefulWidget {
   const NotebookHomeScreen({Key? key}) : super(key: key);
@@ -29,46 +28,73 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
   bool _isGridView = false;
   String _searchQuery = '';
 
-  late NoteController controller;
+  late Future<NoteController> _controllerFuture;
   final AuthController _authController = Get.find<AuthController>();
 
   @override
   void initState() {
     super.initState();
-    _initializeController();
+    _controllerFuture = _initializeController();
   }
 
-  Future<void> _initializeController() async {
+  Future<NoteController> _initializeController() async {
     final localStorage = LocalStorageService();
-    await localStorage.init(); // Make sure to init first
+    await localStorage.init();
     final repository = NoteRepository(localStorage);
-    controller = NoteController(repository);
-
-    // Listen to auth changes without ever()
-    _authController.addListener(_onAuthChanged);
-  }
-
-  void _onAuthChanged() {
-    if (_authController.isAuthenticated.value && mounted) {
-      controller.loadNotes();
-    }
-  }
-
-  @override
-  void dispose() {
-    _authController.removeListener(_onAuthChanged);
-    super.dispose();
+    final controller = NoteController(repository);
+    return controller;
   }
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: controller,
-      child: Scaffold(
-        appBar: _buildAppBar(),
-        body: _buildBody(),
-        floatingActionButton: _buildFloatingActionButton(),
-      ),
+    return FutureBuilder<NoteController>(
+      future: _controllerFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading notes: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _controllerFuture = _initializeController();
+                      });
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final controller = snapshot.data!;
+
+        return ChangeNotifierProvider.value(
+          value: controller,
+          child: Scaffold(
+            appBar: _buildAppBar(),
+            body: _buildBody(controller),
+            floatingActionButton: _buildFloatingActionButton(controller),
+          ),
+        );
+      },
     );
   }
 
@@ -110,105 +136,64 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
             });
           },
         ),
-        // Secret vault indicator (subtle)
-        IconButton(
-          icon: Icon(Icons.lock_outline, size: 20, color: Colors.grey.shade400),
-          onPressed: () {
-            // This is a decoy - does nothing
-            _showDecoyMessage();
-          },
-        ),
       ],
     );
   }
 
-  void _showDecoyMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Premium feature coming soon!'),
-        duration: const Duration(seconds: 1),
-        backgroundColor: Colors.grey.shade600,
-      ),
+  Widget _buildBody(NoteController controller) {
+    return Consumer<NoteController>(
+      builder: (context, noteController, child) {
+        if (noteController.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final filteredNotes = noteController.notes.where((note) {
+          if (_searchQuery.isEmpty) return true;
+          return note.title.toLowerCase().contains(
+                _searchQuery.toLowerCase(),
+              ) ||
+              (note.content.toLowerCase().contains(_searchQuery.toLowerCase()));
+        }).toList();
+
+        if (filteredNotes.isEmpty) {
+          return EmptyStateWidget(
+            icon: Icons.note_add,
+            title: 'No notes yet',
+            subtitle: 'Tap the + button to create your first note',
+            onActionPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddEditNoteScreen()),
+              );
+              if (result != null) {
+                noteController.addNote(result);
+                _showSnackBar('Note added successfully');
+              }
+            },
+            actionLabel: 'Create Note',
+          );
+        }
+
+        return _isGridView
+            ? _buildGridView(filteredNotes, noteController)
+            : _buildListView(filteredNotes, noteController);
+      },
     );
   }
 
-  Widget _buildBody() {
-    return GestureDetector(
-      // Secret gesture: Long press anywhere on the background for 3 seconds
-      onLongPress: () async {
-        await _triggerSecretAccess();
-      },
-      onLongPressStart: (details) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Hold for secret access...'),
-            duration: Duration(seconds: 2),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      },
-      child: Consumer<NoteController>(
-        builder: (context, controller, child) {
-          if (controller.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final filteredNotes = controller.notes.where((note) {
-            if (_searchQuery.isEmpty) return true;
-            return note.title.toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ) ||
-                (note.content?.toLowerCase().contains(
-                      _searchQuery.toLowerCase(),
-                    ) ??
-                    false);
-          }).toList();
-
-          if (filteredNotes.isEmpty) {
-            return EmptyStateWidget(
-              icon: Icons.note_add,
-              title: 'No notes yet',
-              subtitle: 'Tap the + button to create your first note',
-              onActionPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddEditNoteScreen()),
-                );
-                if (result != null) {
-                  controller.addNote(result);
-                  _showSnackBar('Note added successfully');
-                }
-              },
-              actionLabel: 'Create Note',
-            );
-          }
-
-          return _isGridView
-              ? _buildGridView(filteredNotes, controller)
-              : _buildListView(filteredNotes, controller);
-        },
-      ),
-    );
-  }
-
-  Widget _buildListView(List notes, NoteController controller) {
+  Widget _buildListView(List<Note> notes, NoteController controller) {
     return ListView.builder(
       itemCount: notes.length,
       itemBuilder: (context, index) {
         final note = notes[index];
-        final isSecret =
-            note.isSecretTrigger ||
-            SecretNoteService.isSecretTrigger(note.title);
 
-        return NoteListItem(
-          note: note,
-          isGridView: false,
-          onTap: () async {
-            if (isSecret) {
-              // Handle secret note tap
-              await _handleSecretNoteTap(note);
-            } else {
-              // Regular note tap
+        return GestureDetector(
+          // Long press ANY note to redirect to auth
+          onLongPress: () => _redirectToAuth(),
+          child: NoteListItem(
+            note: note,
+            isGridView: false,
+            onTap: () async {
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => NoteDetailScreen(note: note)),
@@ -216,28 +201,28 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
               if (result != null) {
                 setState(() {});
               }
-            }
-          },
-          onDelete: () async {
-            final confirmed = await ConfirmationDialog.show(
-              context: context,
-              title: 'Delete Note',
-              message: 'Are you sure you want to delete "${note.title}"?',
-              confirmText: 'Delete',
-              icon: Icons.delete,
-            );
+            },
+            onDelete: () async {
+              final confirmed = await ConfirmationDialog.show(
+                context: context,
+                title: 'Delete Note',
+                message: 'Are you sure you want to delete "${note.title}"?',
+                confirmText: 'Delete',
+                icon: Icons.delete,
+              );
 
-            if (confirmed == true) {
-              controller.deleteNoteById(note.id);
-              _showSnackBar('Note deleted');
-            }
-          },
+              if (confirmed == true) {
+                controller.deleteNoteById(note.id);
+                _showSnackBar('Note deleted');
+              }
+            },
+          ),
         );
       },
     );
   }
 
-  Widget _buildGridView(List notes, NoteController controller) {
+  Widget _buildGridView(List<Note> notes, NoteController controller) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -249,19 +234,14 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
       itemCount: notes.length,
       itemBuilder: (context, index) {
         final note = notes[index];
-        final isSecret =
-            note.isSecretTrigger ||
-            SecretNoteService.isSecretTrigger(note.title);
 
-        return NoteListItem(
-          note: note,
-          isGridView: true,
-          onTap: () async {
-            if (isSecret) {
-              // Handle secret note tap
-              await _handleSecretNoteTap(note);
-            } else {
-              // Regular note tap
+        return GestureDetector(
+          // Long press ANY note to redirect to auth
+          onLongPress: () => _redirectToAuth(),
+          child: NoteListItem(
+            note: note,
+            isGridView: true,
+            onTap: () async {
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => NoteDetailScreen(note: note)),
@@ -269,166 +249,44 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen> {
               if (result != null) {
                 setState(() {});
               }
-            }
-          },
-          onDelete: () async {
-            final confirmed = await ConfirmationDialog.show(
-              context: context,
-              title: 'Delete Note',
-              message: 'Are you sure you want to delete "${note.title}"?',
-              confirmText: 'Delete',
-              icon: Icons.delete,
-            );
+            },
+            onDelete: () async {
+              final confirmed = await ConfirmationDialog.show(
+                context: context,
+                title: 'Delete Note',
+                message: 'Are you sure you want to delete "${note.title}"?',
+                confirmText: 'Delete',
+                icon: Icons.delete,
+              );
 
-            if (confirmed == true) {
-              controller.deleteNoteById(note.id);
-              _showSnackBar('Note deleted');
-            }
-          },
+              if (confirmed == true) {
+                controller.deleteNoteById(note.id);
+                _showSnackBar('Note deleted');
+              }
+            },
+          ),
         );
       },
     );
   }
 
-  Future<void> _handleSecretNoteTap(Note note) async {
-    // Show dialog explaining this is a locked note
-    final shouldAuthenticate = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.lock_outline, color: Colors.orange.shade700),
-              const SizedBox(width: 8),
-              const Text('Locked Note'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                SecretNoteService.getWarningMessage(note.title),
-                style: const TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 16,
-                      color: Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Note: "${SecretNoteService.getDisguisedTitle(note.title)}"',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_authController.hasPin.value) ...[
-                const SizedBox(height: 12),
-                Text(
-                  'Enter your PIN to access the vault.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text('Unlock'),
-            ),
-          ],
-        );
-      },
+  void _redirectToAuth() {
+    // Show a subtle feedback
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Redirecting to secure access...'),
+        duration: Duration(milliseconds: 2000),
+      ),
     );
 
-    if (shouldAuthenticate == true) {
-      // Request vault access (this will show PIN entry or setup)
-      await _authController.requestVaultAccess();
-    }
-  }
-
-  Future<void> _triggerSecretAccess() async {
-    // Check if PIN is already set
-    final hasPin = _authController.hasPin.value;
-
-    if (!hasPin) {
-      // First time setup
-      final shouldSetup = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Secret Vault Access'),
-          content: const Text(
-            'This will open the secure vault where you can store private files. '
-            'Set up a PIN to protect your vault.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text('Set Up'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldSetup == true) {
-        await _authController.requestVaultAccess();
-      }
+    if (!_authController.hasPin.value) {
+      Navigator.pushNamed(context, '/set-pin');
     } else {
-      // Show authentication dialog
-      final shouldAuthenticate = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Secure Vault Access'),
-          content: const Text('Enter your PIN to access the secure vault.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text('Continue'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldAuthenticate == true) {
-        await _authController.requestVaultAccess();
-      }
+      Navigator.pushNamed(context, '/lock-screen');
     }
   }
 
-  Widget _buildFloatingActionButton() {
+  Widget _buildFloatingActionButton(NoteController controller) {
     return FloatingActionButton.extended(
       onPressed: () async {
         final result = await Navigator.push(

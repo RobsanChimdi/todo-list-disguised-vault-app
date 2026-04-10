@@ -1,11 +1,8 @@
 // lib/features/notebook/presentation/widgets/note_list_item.dart
 
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../data/models/note_model.dart';
-import '../../../auth/presentation/controllers/auth_controller.dart';
-import '../../../disguise/services/secret_note_service.dart';
 
 class NoteListItem extends StatelessWidget {
   final Note note;
@@ -27,16 +24,10 @@ class NoteListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Check if this is a secret trigger note
-    final isSecret =
-        note.isSecretTrigger || SecretNoteService.isSecretTrigger(note.title);
-
-    return isGridView
-        ? _buildGridCard(context, isSecret)
-        : _buildListTile(context, isSecret);
+    return isGridView ? _buildGridCard(context) : _buildListTile(context);
   }
 
-  Widget _buildListTile(BuildContext context, bool isSecret) {
+  Widget _buildListTile(BuildContext context) {
     return Dismissible(
       key: Key(note.id),
       direction: DismissDirection.endToStart,
@@ -52,34 +43,22 @@ class NoteListItem extends StatelessWidget {
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: InkWell(
-          onTap: () {
-            if (isSecret) {
-              _handleSecretNoteTap(context);
-            } else {
-              onTap();
-            }
-          },
+          onTap: onTap, // Simple tap - no authentication check
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Note icon/avatar with lock for secret notes
+                // Note icon/avatar
                 Container(
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: isSecret
-                        ? Colors.orange.withOpacity(0.2)
-                        : _getNoteColor().withOpacity(0.2),
+                    color: _getNoteColor().withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    isSecret ? Icons.lock : _getNoteIcon(),
-                    color: isSecret ? Colors.orange : _getNoteColor(),
-                    size: 28,
-                  ),
+                  child: Icon(_getNoteIcon(), color: _getNoteColor(), size: 28),
                 ),
                 const SizedBox(width: 12),
 
@@ -92,50 +71,25 @@ class NoteListItem extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              // Use disguised title for secret notes
-                              isSecret
-                                  ? SecretNoteService.getDisguisedTitle(
-                                      note.title,
-                                    )
-                                  : note.title,
-                              style: TextStyle(
+                              note.title,
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 16,
-                                color: isSecret ? Colors.orange.shade800 : null,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (note.isFavorite && !isSecret)
+                          if (note.isFavorite)
                             const Icon(
                               Icons.favorite,
                               size: 16,
                               color: Colors.red,
                             ),
-                          if (isSecret)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                'Locked',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.orange,
-                                ),
-                              ),
-                            ),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      if (note.content.isNotEmpty && !isSecret)
+                      if (note.content.isNotEmpty)
                         Text(
                           note.content,
                           style: TextStyle(
@@ -143,17 +97,6 @@ class NoteListItem extends StatelessWidget {
                             color: Colors.grey[600],
                           ),
                           maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      if (isSecret)
-                        Text(
-                          '🔒 This note is locked. Tap to authenticate.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange[600],
-                            fontStyle: FontStyle.italic,
-                          ),
-                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       const SizedBox(height: 8),
@@ -172,8 +115,8 @@ class NoteListItem extends StatelessWidget {
                               color: Colors.grey[500],
                             ),
                           ),
-                          const Spacer(),
-                          if (note.tags.isNotEmpty && !isSecret)
+                          if (note.tags.isNotEmpty) ...[
+                            const Spacer(),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -191,24 +134,7 @@ class NoteListItem extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          if (isSecret && note.tags.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '#${note.tags.first}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ),
+                          ],
                         ],
                       ),
                     ],
@@ -230,18 +156,12 @@ class NoteListItem extends StatelessWidget {
     );
   }
 
-  Widget _buildGridCard(BuildContext context, bool isSecret) {
+  Widget _buildGridCard(BuildContext context) {
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
-        onTap: () {
-          if (isSecret) {
-            _handleSecretNoteTap(context);
-          } else {
-            onTap();
-          }
-        },
+        onTap: onTap, // Simple tap - no authentication check
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(12),
@@ -254,40 +174,19 @@ class NoteListItem extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: isSecret
-                          ? Colors.orange.withOpacity(0.2)
-                          : _getNoteColor().withOpacity(0.2),
+                      color: _getNoteColor().withOpacity(0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
-                      isSecret ? Icons.lock : _getNoteIcon(),
-                      color: isSecret ? Colors.orange : _getNoteColor(),
+                      _getNoteIcon(),
+                      color: _getNoteColor(),
                       size: 20,
                     ),
                   ),
                   const Spacer(),
-                  if (note.isFavorite && !isSecret)
+                  if (note.isFavorite)
                     const Icon(Icons.favorite, size: 16, color: Colors.red),
-                  if (isSecret)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        'Locked',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.orange,
-                        ),
-                      ),
-                    ),
-                  if (showDeleteButton && !isSecret)
+                  if (showDeleteButton)
                     IconButton(
                       icon: const Icon(Icons.delete_outline, size: 20),
                       onPressed: onDelete,
@@ -300,13 +199,10 @@ class NoteListItem extends StatelessWidget {
 
               // Title
               Text(
-                isSecret
-                    ? SecretNoteService.getDisguisedTitle(note.title)
-                    : note.title,
-                style: TextStyle(
+                note.title,
+                style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: isSecret ? Colors.orange.shade800 : null,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -314,22 +210,11 @@ class NoteListItem extends StatelessWidget {
               const SizedBox(height: 8),
 
               // Content preview
-              if (note.content.isNotEmpty && !isSecret)
+              if (note.content.isNotEmpty)
                 Text(
                   note.content,
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              if (isSecret)
-                Text(
-                  '🔒 Locked - Tap to authenticate',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.orange[600],
-                    fontStyle: FontStyle.italic,
-                  ),
-                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
 
@@ -344,7 +229,7 @@ class NoteListItem extends StatelessWidget {
                     DateFormatter.formatRelative(note.lastEdited),
                     style: TextStyle(fontSize: 10, color: Colors.grey[500]),
                   ),
-                  if (note.tags.isNotEmpty && !isSecret) ...[
+                  if (note.tags.isNotEmpty) ...[
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -361,23 +246,6 @@ class NoteListItem extends StatelessWidget {
                       ),
                     ),
                   ],
-                  if (isSecret && note.tags.isNotEmpty) ...[
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '#${note.tags.first}',
-                        style: TextStyle(fontSize: 9, color: Colors.grey[600]),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ],
@@ -385,79 +253,6 @@ class NoteListItem extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  void _handleSecretNoteTap(BuildContext context) async {
-    final AuthController authController = Get.find<AuthController>();
-
-    final shouldAuthenticate = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.lock_outline, color: Colors.orange.shade700),
-              const SizedBox(width: 8),
-              const Text('Locked Note'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                SecretNoteService.getWarningMessage(note.title),
-                style: const TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 16,
-                      color: Colors.grey.shade600,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Note: "${SecretNoteService.getDisguisedTitle(note.title)}"',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text('Unlock'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldAuthenticate == true) {
-      await authController.requestVaultAccess();
-    }
   }
 
   Color _getNoteColor() {

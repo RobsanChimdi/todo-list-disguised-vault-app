@@ -11,7 +11,7 @@ class Note {
   final String title;
 
   @HiveField(2)
-  final String content; // Changed to non-nullable
+  final String content;
 
   @HiveField(3)
   final DateTime createdAt;
@@ -37,9 +37,6 @@ class Note {
   @HiveField(10)
   final String? colorLabel;
 
-  @HiveField(11)
-  final bool isSecretTrigger;
-
   const Note({
     required this.id,
     required this.title,
@@ -52,14 +49,12 @@ class Note {
     this.wordCount = 0,
     this.backgroundColor = 0xFFFFFFFF,
     this.colorLabel,
-    this.isSecretTrigger = false,
   });
 
   factory Note.create({
     required String title,
-    String content = '', // Default to empty string
+    String content = '',
     List<String>? tags,
-    bool isSecretTrigger = false,
   }) {
     final now = DateTime.now();
     final cleanContent = content.trim();
@@ -75,7 +70,6 @@ class Note {
       lastEdited: now,
       tags: tags ?? [],
       wordCount: words,
-      isSecretTrigger: isSecretTrigger,
     );
   }
 
@@ -87,7 +81,6 @@ class Note {
     List<String>? tags,
     int? backgroundColor,
     String? colorLabel,
-    bool? isSecretTrigger,
   }) {
     final updatedContent = content ?? this.content;
 
@@ -103,7 +96,6 @@ class Note {
       wordCount: _calculateWordCount(updatedContent),
       backgroundColor: backgroundColor ?? this.backgroundColor,
       colorLabel: colorLabel ?? this.colorLabel,
-      isSecretTrigger: isSecretTrigger ?? this.isSecretTrigger,
     );
   }
 
@@ -125,7 +117,6 @@ class Note {
     'wordCount': wordCount,
     'backgroundColor': backgroundColor,
     'colorLabel': colorLabel,
-    'isSecretTrigger': isSecretTrigger,
   };
 
   factory Note.fromJson(Map<String, dynamic> json) {
@@ -143,7 +134,6 @@ class Note {
       wordCount: json['wordCount'] ?? 0,
       backgroundColor: json['backgroundColor'] ?? 0xFFFFFFFF,
       colorLabel: json['colorLabel'],
-      isSecretTrigger: json['isSecretTrigger'] ?? false,
     );
   }
 }

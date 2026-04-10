@@ -6,7 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'features/auth/presentation/controllers/auth_controller.dart';
 import 'features/disguise/controllers/disguise_controller.dart';
 import 'features/notebook/presentation/controllers/note_controller.dart';
-import 'features/vault/presentation/controllers/vualt_controller.dart';
+import 'features/vault/presentation/controllers/vault_controller.dart';
 import 'features/notebook/data/repositories/note_repository.dart';
 import 'features/vault/data/repositories/vault_repository.dart';
 import 'core/services/local_storage_service.dart';

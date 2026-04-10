@@ -19,8 +19,8 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   late VideoPlayerController _videoController;
   bool _isVideoInitialized = false;
 
-  late File _file;
-  late VaultItem _item;
+  File? _file;
+  VaultItem? _item;
 
   @override
   void initState() {
@@ -45,8 +45,8 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   }
 
   void _initializeViewer() {
-    if (_item.fileType == 'video') {
-      _videoController = VideoPlayerController.file(_file);
+    if (_item != null && _item!.fileType == 'video' && _file != null) {
+      _videoController = VideoPlayerController.file(_file!);
       _videoController.initialize().then((_) {
         setState(() {
           _isVideoInitialized = true;
@@ -58,21 +58,30 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
 
   @override
   void dispose() {
-    if (_item.fileType == 'video') {
+    if (_item != null && _item!.fileType == 'video') {
       _videoController.dispose();
     }
     // Delete temporary decrypted file after a delay
-    Future.delayed(const Duration(seconds: 5), () {
-      _file.delete();
-    });
+    if (_file != null) {
+      Future.delayed(const Duration(seconds: 5), () {
+        _file?.delete();
+      });
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_file == null || _item == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: const Center(child: Text('Unable to load file')),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(_item.name),
+        title: Text(_item!.name),
         backgroundColor: Colors.black,
         elevation: 0,
         actions: [
@@ -91,18 +100,18 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   }
 
   Widget _buildViewer() {
-    final extension = _item.name.split('.').last.toLowerCase();
+    final extension = _item!.name.split('.').last.toLowerCase();
 
-    if (_item.fileType == 'image' ||
+    if (_item!.fileType == 'image' ||
         ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension)) {
       return InteractiveViewer(
         minScale: 0.5,
         maxScale: 4.0,
-        child: Image.file(_file, fit: BoxFit.contain, width: double.infinity),
+        child: Image.file(_file!, fit: BoxFit.contain, width: double.infinity),
       );
     }
 
-    if (_item.fileType == 'video') {
+    if (_item!.fileType == 'video') {
       if (_isVideoInitialized) {
         return Column(
           children: [
@@ -151,7 +160,6 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // For PDFs and other documents, offer to open with external app
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -164,13 +172,13 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'File type: ${_item.fileType}',
+            'File type: ${_item!.fileType}',
             style: TextStyle(fontSize: 14, color: Colors.grey[500]),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () {
-              OpenFile.open(_file.path);
+              OpenFile.open(_file!.path);
             },
             icon: const Icon(Icons.open_in_new),
             label: const Text('Open with External App'),
