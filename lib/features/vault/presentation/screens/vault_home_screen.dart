@@ -1,10 +1,11 @@
 // lib/features/vault/presentation/screens/vault_home_screen.dart
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:my_first_app/features/vault/domain/entities/vault_item.dart';
 import '../controllers/vault_controller.dart';
 import '../widgets/vault_item_card.dart';
-import 'file_viewer_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../routes/app_routes.dart';
@@ -29,7 +30,8 @@ class VaultHomeScreen extends StatelessWidget {
         () => Text(
           controller.currentFolder.value.isEmpty
               ? 'Secure Vault'
-              : 'Folder: ${controller.currentFolder.value}',
+              : '📁 ${controller.currentFolder.value}',
+          style: const TextStyle(fontSize: 16),
         ),
       ),
       elevation: 0,
@@ -44,40 +46,99 @@ class VaultHomeScreen extends StatelessWidget {
         return const SizedBox.shrink();
       }),
       actions: [
+        // Search button
         IconButton(
           icon: const Icon(Icons.search),
-          onPressed: () {
-            _showSearchDialog(controller);
-          },
+          onPressed: () => _showSearchDialog(controller),
         ),
+
+        // Filter button with badge
         Obx(
-          () => PopupMenuButton<String>(
-            icon: const Icon(Icons.filter_list),
-            onSelected: (value) => controller.setFilter(value),
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'all', child: Text('All Files')),
-              const PopupMenuItem(value: 'images', child: Text('Images')),
-              const PopupMenuItem(value: 'videos', child: Text('Videos')),
-              const PopupMenuItem(value: 'documents', child: Text('Documents')),
+          () => Stack(
+            children: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.filter_list),
+                onSelected: (value) => controller.setFilter(value),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'all',
+                    child: Row(
+                      children: [
+                        Icon(Icons.grid_view, size: 20),
+                        SizedBox(width: 12),
+                        Text('All Files'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'images',
+                    child: Row(
+                      children: [
+                        Icon(Icons.image, size: 20, color: Colors.blue),
+                        SizedBox(width: 12),
+                        Text('Images'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'videos',
+                    child: Row(
+                      children: [
+                        Icon(Icons.videocam, size: 20, color: Colors.red),
+                        SizedBox(width: 12),
+                        Text('Videos'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'documents',
+                    child: Row(
+                      children: [
+                        Icon(Icons.description, size: 20, color: Colors.green),
+                        SizedBox(width: 12),
+                        Text('Documents'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (controller.selectedFilter.value != 'all')
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      size: 10,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
+
+        // New folder button
         IconButton(
           icon: const Icon(Icons.create_new_folder),
           onPressed: () => _showCreateFolderDialog(controller),
         ),
+
+        // Logout button
         IconButton(
           icon: const Icon(Icons.logout),
-          onPressed: () {
-            _showLogoutDialog(controller);
-          },
+          onPressed: () => _showLogoutDialog(controller),
         ),
       ],
     );
   }
 
   Widget _buildBody(VaultController controller) {
-    // Use Obx only around the content that depends on observables
     return Obx(() {
       if (controller.isLoading.value && controller.items.isEmpty) {
         return const Center(child: CircularProgressIndicator());
@@ -89,7 +150,10 @@ class VaultHomeScreen extends StatelessWidget {
         return _buildEmptyState(controller);
       }
 
-      return _buildItemGrid(items, controller);
+      return RefreshIndicator(
+        onRefresh: () => controller.refreshItems(),
+        child: _buildItemGrid(items, controller),
+      );
     });
   }
 
@@ -121,7 +185,7 @@ class VaultHomeScreen extends StatelessWidget {
             children: [
               CustomButton(
                 text: 'Add Files',
-                onPressed: () => _showAddOptions(),
+                onPressed: () => _showAddOptions(controller),
                 icon: Icons.add,
               ),
               CustomButton(
@@ -137,7 +201,7 @@ class VaultHomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildItemGrid(List items, VaultController controller) {
+  Widget _buildItemGrid(List<VaultItem> items, VaultController controller) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -155,12 +219,27 @@ class VaultHomeScreen extends StatelessWidget {
             if (item.fileType == 'folder') {
               controller.navigateToFolder(item.name);
             } else {
-              final file = await controller.getDecryptedFile(item);
-              if (file != null) {
-                Get.toNamed(
-                  AppRoutes.fileViewer,
-                  arguments: {'path': file.path, 'item': item},
-                );
+              // Show loading
+              Get.dialog(
+                const Center(child: CircularProgressIndicator()),
+                barrierDismissible: false,
+              );
+
+              try {
+                final file = await controller.getDecryptedFile(item);
+                if (file != null && context.mounted) {
+                  Get.back(); // Close loading
+                  Get.toNamed(
+                    AppRoutes.fileViewer,
+                    arguments: {'path': file.path, 'item': item},
+                  );
+                } else {
+                  Get.back(); // Close loading
+                  Get.snackbar('Error', 'Failed to open file');
+                }
+              } catch (e) {
+                Get.back(); // Close loading
+                Get.snackbar('Error', 'Failed to open file: $e');
               }
             }
           },
@@ -170,6 +249,11 @@ class VaultHomeScreen extends StatelessWidget {
           onShare: () {
             controller.shareItem(item);
           },
+          onRestore: item.originalPath != null
+              ? () {
+                  _showRestoreConfirmation(controller, item);
+                }
+              : null,
         );
       },
     );
@@ -177,13 +261,13 @@ class VaultHomeScreen extends StatelessWidget {
 
   Widget _buildFloatingActionButton(VaultController controller) {
     return FloatingActionButton(
-      onPressed: () => _showAddOptions(),
+      onPressed: () => _showAddOptions(controller),
       child: const Icon(Icons.add),
       backgroundColor: AppColors.primary,
     );
   }
 
-  void _showAddOptions() {
+  void _showAddOptions(VaultController controller) {
     Get.bottomSheet(
       Container(
         padding: const EdgeInsets.all(20),
@@ -200,32 +284,35 @@ class VaultHomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _buildOptionTile(
-              icon: Icons.photo,
-              title: 'Image',
+              icon: Icons.photo_library,
+              title: 'Images',
               subtitle: 'Add photos from gallery',
+              color: Colors.blue,
               onTap: () {
                 Get.back();
-                Get.find<VaultController>().addImage();
+                controller.addImage();
               },
             ),
             const Divider(),
             _buildOptionTile(
               icon: Icons.videocam,
-              title: 'Video',
+              title: 'Videos',
               subtitle: 'Add videos from gallery',
+              color: Colors.red,
               onTap: () {
                 Get.back();
-                Get.find<VaultController>().addVideo();
+                controller.addVideo();
               },
             ),
             const Divider(),
             _buildOptionTile(
               icon: Icons.insert_drive_file,
-              title: 'File',
+              title: 'Files',
               subtitle: 'Add documents, PDFs, etc.',
+              color: Colors.green,
               onTap: () {
                 Get.back();
-                Get.find<VaultController>().addFile();
+                controller.addFile();
               },
             ),
             const Divider(),
@@ -233,9 +320,10 @@ class VaultHomeScreen extends StatelessWidget {
               icon: Icons.note_add,
               title: 'Secure Note',
               subtitle: 'Create an encrypted text note',
+              color: Colors.purple,
               onTap: () {
                 Get.back();
-                _showCreateNoteDialog();
+                _showCreateNoteDialog(controller);
               },
             ),
             const SizedBox(height: 20),
@@ -245,23 +333,46 @@ class VaultHomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildOptionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, size: 28, color: color),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(subtitle),
+      onTap: onTap,
+    );
+  }
+
   void _showCreateFolderDialog(VaultController controller) {
     final TextEditingController folderNameController = TextEditingController();
 
     Get.dialog(
       AlertDialog(
-        title: const Text('Create Folder'),
+        title: const Text('Create New Folder'),
         content: TextField(
           controller: folderNameController,
           autofocus: true,
           decoration: const InputDecoration(
             hintText: 'Enter folder name',
+            prefixIcon: Icon(Icons.folder),
             border: OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               if (folderNameController.text.trim().isNotEmpty) {
                 controller.createFolder(folderNameController.text.trim());
@@ -275,7 +386,7 @@ class VaultHomeScreen extends StatelessWidget {
     );
   }
 
-  void _showCreateNoteDialog() {
+  void _showCreateNoteDialog(VaultController controller) {
     final TextEditingController titleController = TextEditingController();
     final TextEditingController contentController = TextEditingController();
 
@@ -289,6 +400,7 @@ class VaultHomeScreen extends StatelessWidget {
               controller: titleController,
               decoration: const InputDecoration(
                 hintText: 'Note title',
+                prefixIcon: Icon(Icons.title),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -297,6 +409,7 @@ class VaultHomeScreen extends StatelessWidget {
               controller: contentController,
               decoration: const InputDecoration(
                 hintText: 'Note content',
+                prefixIcon: Icon(Icons.note),
                 border: OutlineInputBorder(),
               ),
               maxLines: 5,
@@ -305,10 +418,10 @@ class VaultHomeScreen extends StatelessWidget {
         ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               if (titleController.text.trim().isNotEmpty) {
-                Get.find<VaultController>().createSecureNote(
+                controller.createSecureNote(
                   titleController.text.trim(),
                   contentController.text,
                 );
@@ -322,67 +435,91 @@ class VaultHomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildOptionTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      leading: Icon(icon, size: 32, color: AppColors.primary),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle),
-      onTap: onTap,
-    );
-  }
-
   void _showSearchDialog(VaultController controller) {
-    String query = '';
-    showDialog(
-      context: Get.context!,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Search Vault'),
-          content: TextField(
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'Enter file name...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (value) => query = value,
+    final TextEditingController searchController = TextEditingController();
+
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Search Vault'),
+        content: TextField(
+          controller: searchController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Enter file name...',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                controller.setSearchQuery(query);
-                Navigator.pop(context);
-              },
-              child: const Text('Search'),
-            ),
-          ],
-        );
-      },
+          onSubmitted: (value) {
+            controller.setSearchQuery(value);
+            Get.back();
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              controller.setSearchQuery('');
+              Get.back();
+            },
+            child: const Text('Clear'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              controller.setSearchQuery(searchController.text);
+              Get.back();
+            },
+            child: const Text('Search'),
+          ),
+        ],
+      ),
     );
   }
 
-  void _showDeleteConfirmation(VaultController controller, dynamic item) {
+  void _showDeleteConfirmation(VaultController controller, VaultItem item) {
     Get.dialog(
       AlertDialog(
         title: const Text('Delete File'),
-        content: Text('Are you sure you want to delete "${item.name}"?'),
+        content: Text(
+          'Are you sure you want to delete "${item.name}"?\n\nThis action cannot be undone.',
+        ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               Get.back();
               controller.deleteItem(item);
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRestoreConfirmation(VaultController controller, VaultItem item) {
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Restore File'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Restore "${item.name}" to its original location?'),
+            const SizedBox(height: 8),
+            Text(
+              'Original path: ${item.originalPath}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              Get.back();
+              controller.restoreItem(item);
+            },
+            child: const Text('Restore'),
           ),
         ],
       ),
@@ -396,12 +533,13 @@ class VaultHomeScreen extends StatelessWidget {
         content: const Text('Are you sure you want to exit the secure vault?'),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Stay')),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               Get.back();
               controller.logout();
             },
-            child: const Text('Exit', style: TextStyle(color: Colors.orange)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Exit'),
           ),
         ],
       ),

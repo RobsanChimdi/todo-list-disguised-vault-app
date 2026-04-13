@@ -1,5 +1,3 @@
-// lib/features/vault/domain/entities/vault_item.dart
-
 import 'package:equatable/equatable.dart';
 
 class VaultItem extends Equatable {
@@ -8,6 +6,7 @@ class VaultItem extends Equatable {
   final String? filePath;
   final String fileType;
   final int fileSize;
+  final String? originalPath;
   final DateTime createdAt;
   final DateTime? lastOpened;
   final bool isEncrypted;
@@ -19,6 +18,7 @@ class VaultItem extends Equatable {
     required this.name,
     this.filePath,
     required this.fileType,
+    this.originalPath,
     required this.fileSize,
     required this.createdAt,
     this.lastOpened,
@@ -27,31 +27,38 @@ class VaultItem extends Equatable {
     this.metadata,
   });
 
+  /// ✅ Better unique ID
   factory VaultItem.create({
     required String name,
     required String fileType,
     required int fileSize,
+    required originalPath,
     String? filePath,
     String? thumbnailPath,
     Map<String, dynamic>? metadata,
   }) {
+    final now = DateTime.now();
+
     return VaultItem(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: '${now.microsecondsSinceEpoch}_${name.hashCode}',
       name: name,
       filePath: filePath,
       fileType: fileType,
       fileSize: fileSize,
-      createdAt: DateTime.now(),
+      originalPath: originalPath,
+      createdAt: now,
       isEncrypted: true,
       thumbnailPath: thumbnailPath,
-      metadata: metadata,
+      metadata: metadata != null ? Map.from(metadata) : null,
     );
   }
 
+  /// ✅ Safe immutable copy
   VaultItem copyWith({
     String? name,
     String? filePath,
     String? fileType,
+    String? originalPath,
     int? fileSize,
     DateTime? lastOpened,
     bool? isEncrypted,
@@ -64,11 +71,14 @@ class VaultItem extends Equatable {
       filePath: filePath ?? this.filePath,
       fileType: fileType ?? this.fileType,
       fileSize: fileSize ?? this.fileSize,
+      originalPath: originalPath ?? this.originalPath,
       createdAt: createdAt,
       lastOpened: lastOpened ?? this.lastOpened,
       isEncrypted: isEncrypted ?? this.isEncrypted,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
-      metadata: metadata ?? this.metadata,
+      metadata: metadata != null
+          ? Map.from(metadata)
+          : (this.metadata != null ? Map.from(this.metadata!) : null),
     );
   }
 
@@ -78,6 +88,7 @@ class VaultItem extends Equatable {
     'filePath': filePath,
     'fileType': fileType,
     'fileSize': fileSize,
+    'originalPath': originalPath,
     'createdAt': createdAt.toIso8601String(),
     'lastOpened': lastOpened?.toIso8601String(),
     'isEncrypted': isEncrypted,
@@ -87,18 +98,21 @@ class VaultItem extends Equatable {
 
   factory VaultItem.fromJson(Map<String, dynamic> json) {
     return VaultItem(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      filePath: json['filePath'] as String?,
-      fileType: json['fileType'] as String,
-      fileSize: json['fileSize'] as int,
-      createdAt: DateTime.parse(json['createdAt']),
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      filePath: json['filePath'],
+      fileType: json['fileType'] ?? 'unknown',
+      fileSize: json['fileSize'] ?? 0,
+      originalPath: json['originalPath'] as String?,
+      createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
       lastOpened: json['lastOpened'] != null
-          ? DateTime.parse(json['lastOpened'])
+          ? DateTime.tryParse(json['lastOpened'])
           : null,
       isEncrypted: json['isEncrypted'] ?? true,
-      thumbnailPath: json['thumbnailPath'] as String?,
-      metadata: json['metadata'] as Map<String, dynamic>?,
+      thumbnailPath: json['thumbnailPath'],
+      metadata: json['metadata'] != null
+          ? Map<String, dynamic>.from(json['metadata'])
+          : null,
     );
   }
 
@@ -109,6 +123,7 @@ class VaultItem extends Equatable {
     filePath,
     fileType,
     fileSize,
+    originalPath,
     createdAt,
     lastOpened,
     isEncrypted,

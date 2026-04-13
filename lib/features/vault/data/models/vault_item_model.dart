@@ -1,5 +1,3 @@
-// lib/features/vault/data/models/vault_item_model.dart (add adapter)
-
 import 'package:hive/hive.dart';
 import '../../domain/entities/vault_item.dart';
 
@@ -12,7 +10,7 @@ class VaultItemModel extends HiveObject {
   final String name;
 
   @HiveField(2)
-  final String? filePath;
+  final String? filePath; // Now points to app's private directory
 
   @HiveField(3)
   final String fileType;
@@ -35,6 +33,9 @@ class VaultItemModel extends HiveObject {
   @HiveField(9)
   final Map<String, dynamic>? metadata;
 
+  @HiveField(10) // New field for original path tracking
+  final String? originalPath;
+
   VaultItemModel({
     required this.id,
     required this.name,
@@ -46,6 +47,7 @@ class VaultItemModel extends HiveObject {
     this.isEncrypted = true,
     this.thumbnailPath,
     this.metadata,
+    this.originalPath,
   });
 
   factory VaultItemModel.fromEntity(VaultItem item) {
@@ -60,6 +62,7 @@ class VaultItemModel extends HiveObject {
       isEncrypted: item.isEncrypted,
       thumbnailPath: item.thumbnailPath,
       metadata: item.metadata,
+      originalPath: item.originalPath,
     );
   }
 
@@ -75,47 +78,63 @@ class VaultItemModel extends HiveObject {
       isEncrypted: isEncrypted,
       thumbnailPath: thumbnailPath,
       metadata: metadata,
+      originalPath: originalPath,
     );
   }
 }
 
-// Add this adapter class at the end of the file
+/// ✅ Enhanced Adapter
 class VaultItemModelAdapter extends TypeAdapter<VaultItemModel> {
   @override
   final int typeId = 1;
 
   @override
   VaultItemModel read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+
     return VaultItemModel(
-      id: reader.readString(),
-      name: reader.readString(),
-      filePath: reader.readString(),
-      fileType: reader.readString(),
-      fileSize: reader.readInt(),
-      createdAt: DateTime.parse(reader.readString()),
-      lastOpened: reader.readBool()
-          ? DateTime.parse(reader.readString())
-          : null,
-      isEncrypted: reader.readBool(),
-      thumbnailPath: reader.readString(),
-      metadata: reader.read() as Map<String, dynamic>?,
+      id: fields[0] as String,
+      name: fields[1] as String,
+      filePath: fields[2] as String?,
+      fileType: fields[3] as String,
+      fileSize: fields[4] as int,
+      createdAt: fields[5] as DateTime,
+      lastOpened: fields[6] as DateTime?,
+      isEncrypted: fields[7] as bool? ?? true,
+      thumbnailPath: fields[8] as String?,
+      metadata: (fields[9] as Map?)?.cast<String, dynamic>(),
+      originalPath: fields[10] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, VaultItemModel obj) {
-    writer.writeString(obj.id);
-    writer.writeString(obj.name);
-    writer.writeString(obj.filePath ?? '');
-    writer.writeString(obj.fileType);
-    writer.writeInt(obj.fileSize);
-    writer.writeString(obj.createdAt.toIso8601String());
-    writer.writeBool(obj.lastOpened != null);
-    if (obj.lastOpened != null) {
-      writer.writeString(obj.lastOpened!.toIso8601String());
-    }
-    writer.writeBool(obj.isEncrypted);
-    writer.writeString(obj.thumbnailPath ?? '');
-    writer.write(obj.metadata);
+    writer
+      ..writeByte(11) // number of fields
+      ..writeByte(0)
+      ..write(obj.id)
+      ..writeByte(1)
+      ..write(obj.name)
+      ..writeByte(2)
+      ..write(obj.filePath)
+      ..writeByte(3)
+      ..write(obj.fileType)
+      ..writeByte(4)
+      ..write(obj.fileSize)
+      ..writeByte(5)
+      ..write(obj.createdAt)
+      ..writeByte(6)
+      ..write(obj.lastOpened)
+      ..writeByte(7)
+      ..write(obj.isEncrypted)
+      ..writeByte(8)
+      ..write(obj.thumbnailPath)
+      ..writeByte(9)
+      ..write(obj.metadata)
+      ..writeByte(10)
+      ..write(obj.originalPath);
   }
 }
