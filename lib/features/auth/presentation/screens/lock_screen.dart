@@ -3,11 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
-import '../../../vault/presentation/screens/vault_home_screen.dart';
-import 'set_pin_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
-import '../../../../core/widgets/custom_button.dart';
 
 class LockScreen extends StatefulWidget {
   const LockScreen({Key? key}) : super(key: key);
@@ -16,75 +13,19 @@ class LockScreen extends StatefulWidget {
   State<LockScreen> createState() => _LockScreenState();
 }
 
-class _LockScreenState extends State<LockScreen>
-    with SingleTickerProviderStateMixin {
+class _LockScreenState extends State<LockScreen> {
   late final AuthController _authController;
   final RxString _enteredPin = ''.obs;
   final RxString _errorMessage = ''.obs;
-  late AnimationController _shakeController;
-  late Animation<double> _shakeAnimation;
-
-  final RxBool _isLoading = false.obs;
 
   @override
   void initState() {
     super.initState();
-    // Ensure AuthController is registered
-    _authController = Get.isRegistered<AuthController>()
-        ? Get.find<AuthController>()
-        : Get.put(AuthController());
-
-    _shakeController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-    _shakeAnimation = Tween<double>(begin: 0, end: 10).animate(
-      CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
-    );
-
-    // Check if PIN exists, if not, redirect to SetPinScreen
-    _checkPinAndRedirect();
-  }
-
-  @override
-  void dispose() {
-    _shakeController.dispose();
-    super.dispose();
-  }
-
-  void _shake() {
-    _shakeController.forward();
-    _shakeController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _shakeController.reset();
-      }
-    });
-  }
-
-  void _checkPinAndRedirect() {
-    // Wait a moment for the UI to load
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (!_authController.hasPin.value && mounted) {
-        // No PIN exists - redirect to SetPinScreen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const SetPinScreen()),
-        );
-      }
-    });
+    _authController = Get.find<AuthController>();
   }
 
   @override
   Widget build(BuildContext context) {
-    // If no PIN exists, show loading or redirect (handled in initState)
-    if (!_authController.hasPin.value) {
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    // PIN exists - show normal lock screen
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -94,121 +35,84 @@ class _LockScreenState extends State<LockScreen>
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
-                  child: AnimatedBuilder(
-                    animation: _shakeAnimation,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(_shakeAnimation.value, 0),
-                        child: child,
-                      );
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Lock icon
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Lock icon
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.lock_outline,
+                          size: 60,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Title
+                      Text(
+                        'Enter PIN',
+                        style: AppStyles.heading1.copyWith(fontSize: 28),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Enter your PIN to access the secure vault',
+                        style: AppStyles.bodyText.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 48),
+
+                      // PIN display (dots)
+                      _buildPinDisplay(),
+                      const SizedBox(height: 32),
+
+                      // Error message
+                      if (_errorMessage.value.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
-                            shape: BoxShape.circle,
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(
-                            Icons.lock_outline,
-                            size: 60,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Title
-                        Text(
-                          'Enter PIN',
-                          style: AppStyles.heading1.copyWith(fontSize: 28),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Enter your PIN to access the secure vault',
-                          style: AppStyles.bodyText.copyWith(
-                            color: Colors.grey[600],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 48),
-
-                        // PIN display (dots)
-                        _buildPinDisplay(),
-                        const SizedBox(height: 32),
-
-                        // Error message
-                        if (_errorMessage.value.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _errorMessage.value,
-                              style: AppStyles.errorText,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        const SizedBox(height: 32),
-
-                        // PIN Pad
-                        _buildPinPad(),
-
-                        const SizedBox(height: 24),
-
-                        // Cancel button
-                        TextButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          child: const Text(
-                            'Cancel',
-                            style: TextStyle(fontSize: 16),
+                          child: Text(
+                            _errorMessage.value,
+                            style: AppStyles.errorText,
+                            textAlign: TextAlign.center,
                           ),
                         ),
+                      const SizedBox(height: 32),
 
-                        // Lockout info
-                        if (_authController.isLocked.value &&
-                            _authController.lockoutUntil.value != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 16),
-                            child: Text(
-                              'Locked for ${_getRemainingLockoutTime()}',
-                              style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
+                      // PIN Pad
+                      _buildPinPad(),
 
-                        // Failed attempts count
-                        if (_authController.failedAttempts.value > 0 &&
-                            !_authController.isLocked.value)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              '${_authController.failedAttempts.value} of 5 attempts used',
-                              style: TextStyle(
-                                color: Colors.orange.shade700,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+                      const SizedBox(height: 24),
+
+                      // Cancel button
+                      TextButton(
+                        onPressed: () {
+                          Get.back();
+                        },
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
 
               // Loading overlay
-              if (_authController.isLoading.value || _isLoading.value)
+              if (_authController.isLoading.value)
                 Container(
                   color: Colors.black.withOpacity(0.5),
                   child: const Center(child: CircularProgressIndicator()),
@@ -358,15 +262,16 @@ class _LockScreenState extends State<LockScreen>
 
     if (isValid) {
       // Success - navigate to vault
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const VaultHomeScreen()),
-      );
+      Get.offAllNamed('/vault');
     } else {
       // Failed
       _enteredPin.value = '';
       _errorMessage.value = 'Invalid PIN';
-      _shake();
+
+      // Check if locked
+      if (_authController.isLocked.value) {
+        _errorMessage.value = 'Too many attempts. Locked for 5 minutes.';
+      }
 
       // Auto clear error after 3 seconds
       Future.delayed(const Duration(seconds: 3), () {
@@ -375,18 +280,5 @@ class _LockScreenState extends State<LockScreen>
         }
       });
     }
-  }
-
-  String _getRemainingLockoutTime() {
-    if (_authController.lockoutUntil.value == null) return '5 minutes';
-    final remaining = _authController.lockoutUntil.value!.difference(
-      DateTime.now(),
-    );
-    final minutes = remaining.inMinutes;
-    final seconds = remaining.inSeconds % 60;
-    if (minutes > 0) {
-      return '$minutes minute${minutes > 1 ? 's' : ''} $seconds second${seconds > 1 ? 's' : ''}';
-    }
-    return '$seconds second${seconds > 1 ? 's' : ''}';
   }
 }

@@ -26,7 +26,6 @@ class VaultItemCard extends StatelessWidget {
     final isFolder = item.fileType == 'folder';
     final fileExtension = item.name.split('.').last.toLowerCase();
 
-    // Determine icon and color based on file type
     final fileInfo = _getFileInfo(isFolder, fileExtension, item.fileType);
 
     return Card(
@@ -40,7 +39,6 @@ class VaultItemCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Thumbnail or Icon
                 Container(
                   height: 120,
                   width: double.infinity,
@@ -54,8 +52,6 @@ class VaultItemCard extends StatelessWidget {
                     child: Icon(fileInfo.icon, size: 48, color: fileInfo.color),
                   ),
                 ),
-
-                // Info
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -98,33 +94,11 @@ class VaultItemCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      if (item.lastOpened != null && !isFolder) ...[
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 10,
-                              color: Colors.grey[500],
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Opened: ${DateFormat('MMM dd').format(item.lastOpened!)}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                     ],
                   ),
                 ),
               ],
             ),
-
-            // Delete button
             Positioned(
               top: 8,
               right: 8,
@@ -144,8 +118,6 @@ class VaultItemCard extends StatelessWidget {
                 ),
               ),
             ),
-
-            // Share button (for non-folders)
             if (!isFolder && onShare != null)
               Positioned(
                 bottom: 8,
@@ -166,8 +138,6 @@ class VaultItemCard extends StatelessWidget {
                   ),
                 ),
               ),
-
-            // Restore button (if file was moved and has original path)
             if (!isFolder && onRestore != null && item.originalPath != null)
               Positioned(
                 bottom: 8,
@@ -188,8 +158,6 @@ class VaultItemCard extends StatelessWidget {
                   ),
                 ),
               ),
-
-            // Encrypted badge
             if (item.isEncrypted && !isFolder)
               Positioned(
                 top: 8,
@@ -226,8 +194,6 @@ class VaultItemCard extends StatelessWidget {
     if (isFolder) {
       return _FileInfo(Icons.folder, Colors.blue.shade700);
     }
-
-    // Images
     if ([
       'jpg',
       'jpeg',
@@ -239,8 +205,6 @@ class VaultItemCard extends StatelessWidget {
     ].contains(extension)) {
       return _FileInfo(Icons.image, Colors.blue);
     }
-
-    // Videos
     if ([
       'mp4',
       'mov',
@@ -252,36 +216,24 @@ class VaultItemCard extends StatelessWidget {
     ].contains(extension)) {
       return _FileInfo(Icons.videocam, Colors.red);
     }
-
-    // Audio
     if (['mp3', 'wav', 'aac', 'flac', 'm4a', 'ogg'].contains(extension)) {
       return _FileInfo(Icons.audiotrack, Colors.purple);
     }
-
-    // PDF
     if (extension == 'pdf') {
       return _FileInfo(Icons.picture_as_pdf, Colors.red);
     }
-
-    // Documents
     if (['doc', 'docx'].contains(extension)) {
       return _FileInfo(Icons.description, Colors.blue);
     }
-
     if (['xls', 'xlsx'].contains(extension)) {
       return _FileInfo(Icons.table_chart, Colors.green);
     }
-
     if (['ppt', 'pptx'].contains(extension)) {
       return _FileInfo(Icons.slideshow, Colors.orange);
     }
-
-    // Text files
     if (['txt', 'md', 'rtf'].contains(extension)) {
       return _FileInfo(Icons.text_fields, Colors.grey);
     }
-
-    // Default
     return _FileInfo(Icons.insert_drive_file, Colors.grey);
   }
 
@@ -298,6 +250,5 @@ class VaultItemCard extends StatelessWidget {
 class _FileInfo {
   final IconData icon;
   final Color color;
-
   _FileInfo(this.icon, this.color);
 }

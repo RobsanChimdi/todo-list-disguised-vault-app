@@ -68,7 +68,8 @@ class MediaService {
   /// [allowedExtensions] - e.g., ['pdf', 'doc', 'docx', 'txt']
   Future<File?> pickFile({List<String>? allowedExtensions}) async {
     try {
-      FilePickerResult? result = await FilePicker.pickFiles(
+      // FIXED: Use FilePicker.platform.pickFiles() instead of FilePicker.pickFiles()
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: allowedExtensions == null ? FileType.any : FileType.custom,
         allowedExtensions: allowedExtensions,
         allowMultiple: false,
@@ -92,7 +93,8 @@ class MediaService {
     List<String>? allowedExtensions,
   }) async {
     try {
-      FilePickerResult? result = await FilePicker.pickFiles(
+      // FIXED: Use FilePicker.platform.pickFiles() instead of FilePicker.pickFiles()
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: allowedExtensions == null ? FileType.any : FileType.custom,
         allowedExtensions: allowedExtensions,
         allowMultiple: true,

@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 import 'package:open_file/open_file.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../domain/entities/vault_item.dart';
 import '../../../../core/constants/app_colors.dart';
 
@@ -68,7 +69,7 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
       }
 
       // Initialize video player if it's a video
-      if (_item!.fileType == 'video') {
+      if (_item!.fileType == 'video' || _isVideoFile(_item!.name)) {
         _videoController = VideoPlayerController.file(_file!);
         await _videoController!.initialize();
         await _videoController!.setLooping(true);
@@ -88,6 +89,28 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  bool _isVideoFile(String fileName) {
+    final videoExtensions = [
+      '.mp4',
+      '.mov',
+      '.avi',
+      '.mkv',
+      '.wmv',
+      '.flv',
+      '.webm',
+    ];
+    return videoExtensions.any((ext) => fileName.toLowerCase().endsWith(ext));
+  }
+
+  bool _isAudioFile(String fileName) {
+    final audioExtensions = ['.mp3', '.wav', '.aac', '.m4a', '.flac', '.ogg'];
+    return audioExtensions.any((ext) => fileName.toLowerCase().endsWith(ext));
+  }
+
+  bool _isPdfFile(String fileName) {
+    return fileName.toLowerCase().endsWith('.pdf');
   }
 
   @override
@@ -171,11 +194,29 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
     }
 
     try {
+      // Create a temporary copy for sharing (in case file gets deleted)
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File(
+        '${tempDir.path}/share_${DateTime.now().millisecondsSinceEpoch}_${_item!.name}',
+      );
+
+      // Copy the file to temp location
+      await _file!.copy(tempFile.path);
+
+      // Share the file
       await Share.shareXFiles([
-        XFile(_file!.path),
+        XFile(tempFile.path),
       ], text: 'Sharing from Secure Vault');
+
+      // Delete temp file after sharing
+      Future.delayed(const Duration(seconds: 10), () async {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      });
     } catch (e) {
-      Get.snackbar('Error', 'Failed to share file');
+      print('Share error: $e');
+      Get.snackbar('Error', 'Failed to share file: $e');
     }
   }
 
@@ -199,8 +240,17 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
     final extension = _item!.name.split('.').last.toLowerCase();
     final isImage =
         _item!.fileType == 'image' ||
-        ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(extension);
+        [
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'webp',
+          'bmp',
+          'heic',
+        ].contains(extension);
 
+    // Handle Images
     if (isImage) {
       return InteractiveViewer(
         minScale: 0.5,
@@ -225,7 +275,8 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
       );
     }
 
-    if (_item!.fileType == 'video' &&
+    // Handle Videos
+    if ((_item!.fileType == 'video' || _isVideoFile(_item!.name)) &&
         _videoController != null &&
         _isVideoInitialized) {
       return Column(
@@ -321,13 +372,152 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
       );
     }
 
-    // For other file types (documents, audio, etc.)
+    // Handle PDF files
+    if (_isPdfFile(_item!.name)) {
+      return _buildPdfViewer();
+    }
+
+    // Handle Audio files
+    if (_isAudioFile(_item!.name)) {
+      return _buildAudioPlayer();
+    }
+
+    // For other file types (documents, etc.)
+    return _buildFallbackViewer();
+  }
+
+  Widget _buildPdfViewer() {
+    return Container(
+      color: Colors.white,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.picture_as_pdf, size: 80, color: Colors.red[400]),
+            const SizedBox(height: 24),
+            const Text(
+              'PDF Document',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _item!.name,
+              style: const TextStyle(fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _openWithExternalApp,
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Open PDF with External App'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => Get.back(),
+              icon: const Icon(Icons.close),
+              label: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAudioPlayer() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.grey[900]!, Colors.grey[800]!],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                color: Colors.grey[700],
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                  ),
+                ],
+              ),
+              child: Icon(Icons.audiotrack, size: 80, color: Colors.grey[400]),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              _item!.name,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Audio File',
+              style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _formatFileSize(_item!.fileSize),
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+            const SizedBox(height: 48),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _openWithExternalApp,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Play with External App'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => Get.back(),
+              icon: const Icon(Icons.close),
+              label: const Text('Close'),
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFallbackViewer() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            _getFileIcon(_item!.fileType, extension),
+            _getFileIcon(
+              _item!.fileType,
+              _item!.name.split('.').last.toLowerCase(),
+            ),
             size: 80,
             color: Colors.grey[400],
           ),
@@ -340,6 +530,11 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
           Text(
             'File type: ${_item!.fileType}',
             style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Name: ${_item!.name}',
+            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
           ),
           const SizedBox(height: 8),
           Text(
@@ -365,7 +560,7 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
 
   IconData _getFileIcon(String fileType, String extension) {
     if (fileType == 'audio' ||
-        ['mp3', 'wav', 'aac', 'flac'].contains(extension)) {
+        ['mp3', 'wav', 'aac', 'flac', 'm4a', 'ogg'].contains(extension)) {
       return Icons.audiotrack;
     }
     if (fileType == 'application/pdf' || extension == 'pdf') {
@@ -379,6 +574,9 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
     }
     if (['ppt', 'pptx'].contains(extension)) {
       return Icons.slideshow;
+    }
+    if (['txt', 'md', 'rtf'].contains(extension)) {
+      return Icons.text_snippet;
     }
     return Icons.insert_drive_file;
   }

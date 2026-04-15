@@ -1,133 +1,49 @@
-import 'package:equatable/equatable.dart';
+// lib/features/vault/domain/entities/vault_item.dart
 
-class VaultItem extends Equatable {
+class VaultItem {
   final String id;
   final String name;
   final String? filePath;
-  final String fileType;
   final int fileSize;
-  final String? originalPath;
+  final String fileType;
   final DateTime createdAt;
-  final DateTime? lastOpened;
   final bool isEncrypted;
-  final String? thumbnailPath;
-  final Map<String, dynamic>? metadata;
+  final String? parentFolder;
+  final String? originalPath;
 
-  const VaultItem({
+  VaultItem({
     required this.id,
     required this.name,
-    this.filePath,
-    required this.fileType,
-    this.originalPath,
+    required this.filePath,
     required this.fileSize,
+    required this.fileType,
     required this.createdAt,
-    this.lastOpened,
-    this.isEncrypted = true,
-    this.thumbnailPath,
-    this.metadata,
+    required this.isEncrypted,
+    this.parentFolder,
+    this.originalPath,
   });
 
-  /// ✅ Better unique ID
-  factory VaultItem.create({
-    required String name,
-    required String fileType,
-    required int fileSize,
-    required originalPath,
-    String? filePath,
-    String? thumbnailPath,
-    Map<String, dynamic>? metadata,
-  }) {
-    final now = DateTime.now();
-
-    return VaultItem(
-      id: '${now.microsecondsSinceEpoch}_${name.hashCode}',
-      name: name,
-      filePath: filePath,
-      fileType: fileType,
-      fileSize: fileSize,
-      originalPath: originalPath,
-      createdAt: now,
-      isEncrypted: true,
-      thumbnailPath: thumbnailPath,
-      metadata: metadata != null ? Map.from(metadata) : null,
-    );
-  }
-
-  /// ✅ Safe immutable copy
   VaultItem copyWith({
+    String? id,
     String? name,
     String? filePath,
-    String? fileType,
-    String? originalPath,
     int? fileSize,
-    DateTime? lastOpened,
+    String? fileType,
+    DateTime? createdAt,
     bool? isEncrypted,
-    String? thumbnailPath,
-    Map<String, dynamic>? metadata,
+    String? parentFolder,
+    String? originalPath,
   }) {
     return VaultItem(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       filePath: filePath ?? this.filePath,
-      fileType: fileType ?? this.fileType,
       fileSize: fileSize ?? this.fileSize,
-      originalPath: originalPath ?? this.originalPath,
-      createdAt: createdAt,
-      lastOpened: lastOpened ?? this.lastOpened,
+      fileType: fileType ?? this.fileType,
+      createdAt: createdAt ?? this.createdAt,
       isEncrypted: isEncrypted ?? this.isEncrypted,
-      thumbnailPath: thumbnailPath ?? this.thumbnailPath,
-      metadata: metadata != null
-          ? Map.from(metadata)
-          : (this.metadata != null ? Map.from(this.metadata!) : null),
+      parentFolder: parentFolder ?? this.parentFolder,
+      originalPath: originalPath ?? this.originalPath,
     );
   }
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'filePath': filePath,
-    'fileType': fileType,
-    'fileSize': fileSize,
-    'originalPath': originalPath,
-    'createdAt': createdAt.toIso8601String(),
-    'lastOpened': lastOpened?.toIso8601String(),
-    'isEncrypted': isEncrypted,
-    'thumbnailPath': thumbnailPath,
-    'metadata': metadata,
-  };
-
-  factory VaultItem.fromJson(Map<String, dynamic> json) {
-    return VaultItem(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      filePath: json['filePath'],
-      fileType: json['fileType'] ?? 'unknown',
-      fileSize: json['fileSize'] ?? 0,
-      originalPath: json['originalPath'] as String?,
-      createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
-      lastOpened: json['lastOpened'] != null
-          ? DateTime.tryParse(json['lastOpened'])
-          : null,
-      isEncrypted: json['isEncrypted'] ?? true,
-      thumbnailPath: json['thumbnailPath'],
-      metadata: json['metadata'] != null
-          ? Map<String, dynamic>.from(json['metadata'])
-          : null,
-    );
-  }
-
-  @override
-  List<Object?> get props => [
-    id,
-    name,
-    filePath,
-    fileType,
-    fileSize,
-    originalPath,
-    createdAt,
-    lastOpened,
-    isEncrypted,
-    thumbnailPath,
-    metadata,
-  ];
 }

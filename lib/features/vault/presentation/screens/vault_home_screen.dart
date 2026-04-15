@@ -52,82 +52,16 @@ class VaultHomeScreen extends StatelessWidget {
           onPressed: () => _showSearchDialog(controller),
         ),
 
-        // Filter button with badge
-        Obx(
-          () => Stack(
-            children: [
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.filter_list),
-                onSelected: (value) => controller.setFilter(value),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'all',
-                    child: Row(
-                      children: [
-                        Icon(Icons.grid_view, size: 20),
-                        SizedBox(width: 12),
-                        Text('All Files'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'images',
-                    child: Row(
-                      children: [
-                        Icon(Icons.image, size: 20, color: Colors.blue),
-                        SizedBox(width: 12),
-                        Text('Images'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'videos',
-                    child: Row(
-                      children: [
-                        Icon(Icons.videocam, size: 20, color: Colors.red),
-                        SizedBox(width: 12),
-                        Text('Videos'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'documents',
-                    child: Row(
-                      children: [
-                        Icon(Icons.description, size: 20, color: Colors.green),
-                        SizedBox(width: 12),
-                        Text('Documents'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              if (controller.selectedFilter.value != 'all')
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      size: 10,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-
-        // New folder button
-        IconButton(
-          icon: const Icon(Icons.create_new_folder),
-          onPressed: () => _showCreateFolderDialog(controller),
-        ),
+        // Add custom folder button (only in root)
+        Obx(() {
+          if (controller.currentFolder.value.isEmpty) {
+            return IconButton(
+              icon: const Icon(Icons.create_new_folder),
+              onPressed: () => _showCreateCustomFolderDialog(controller),
+            );
+          }
+          return const SizedBox.shrink();
+        }),
 
         // Logout button
         IconButton(
@@ -158,6 +92,39 @@ class VaultHomeScreen extends StatelessWidget {
   }
 
   Widget _buildEmptyState(VaultController controller) {
+    // Show predefined folders if in root and no folders exist
+    if (controller.currentFolder.value.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.folder_open, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No folders yet',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tap + to create a custom folder',
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            ),
+            const SizedBox(height: 32),
+            CustomButton(
+              text: 'Create Custom Folder',
+              onPressed: () => _showCreateCustomFolderDialog(controller),
+              icon: Icons.create_new_folder,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Empty state inside a folder
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -165,7 +132,7 @@ class VaultHomeScreen extends StatelessWidget {
           Icon(Icons.folder_open, size: 80, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
-            'Vault is empty',
+            'Folder is empty',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -174,27 +141,8 @@ class VaultHomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Tap + to add files to your secure vault',
+            'Tap + to add items to this folder',
             style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-          ),
-          const SizedBox(height: 32),
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            alignment: WrapAlignment.center,
-            children: [
-              CustomButton(
-                text: 'Add Files',
-                onPressed: () => _showAddOptions(controller),
-                icon: Icons.add,
-              ),
-              CustomButton(
-                text: 'Create Folder',
-                onPressed: () => _showCreateFolderDialog(controller),
-                icon: Icons.create_new_folder,
-                isOutlined: true,
-              ),
-            ],
           ),
         ],
       ),
@@ -260,14 +208,258 @@ class VaultHomeScreen extends StatelessWidget {
   }
 
   Widget _buildFloatingActionButton(VaultController controller) {
-    return FloatingActionButton(
-      onPressed: () => _showAddOptions(controller),
-      child: const Icon(Icons.add),
-      backgroundColor: AppColors.primary,
+    return Obx(() {
+      // Show add button only when inside a folder
+      if (controller.currentFolder.value.isNotEmpty) {
+        return FloatingActionButton(
+          onPressed: () => _showAddOptionsForFolder(
+            controller,
+            controller.currentFolder.value,
+          ),
+          child: const Icon(Icons.add),
+          backgroundColor: AppColors.primary,
+        );
+      }
+      return const SizedBox.shrink();
+    });
+  }
+
+  void _showAddOptionsForFolder(VaultController controller, String folderName) {
+    Widget content;
+
+    // Show different options based on folder type
+    switch (folderName) {
+      case 'Images':
+        content = _buildImageFolderOptions(controller, folderName);
+        break;
+      case 'Videos':
+        content = _buildVideoFolderOptions(controller, folderName);
+        break;
+      case 'Documents':
+        content = _buildDocumentFolderOptions(controller, folderName);
+        break;
+      case 'Audio':
+        content = _buildAudioFolderOptions(controller, folderName);
+        break;
+      default:
+        // Custom folder - allow adding any file type
+        content = _buildCustomFolderOptions(controller, folderName);
+    }
+
+    Get.bottomSheet(
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: content,
+      ),
     );
   }
 
-  void _showAddOptions(VaultController controller) {
+  Widget _buildImageFolderOptions(
+    VaultController controller,
+    String folderName,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Add to Images',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        _buildOptionTile(
+          icon: Icons.photo_library,
+          title: 'Upload from Gallery',
+          subtitle: 'Select images from your gallery',
+          color: Colors.blue,
+          onTap: () {
+            Get.back();
+            controller.addImageToFolder(folderName);
+          },
+        ),
+        const Divider(),
+        _buildOptionTile(
+          icon: Icons.camera_alt,
+          title: 'Capture with Camera',
+          subtitle: 'Take a new photo',
+          color: Colors.orange,
+          onTap: () {
+            Get.back();
+            controller.captureImageToFolder(folderName);
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildVideoFolderOptions(
+    VaultController controller,
+    String folderName,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Add to Videos',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        _buildOptionTile(
+          icon: Icons.video_library,
+          title: 'Upload Video',
+          subtitle: 'Select video from gallery',
+          color: Colors.red,
+          onTap: () {
+            Get.back();
+            controller.addVideoToFolder(folderName);
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildDocumentFolderOptions(
+    VaultController controller,
+    String folderName,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Add to Documents',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        _buildOptionTile(
+          icon: Icons.insert_drive_file,
+          title: 'Upload Document',
+          subtitle: 'PDF, DOC, TXT, etc.',
+          color: Colors.green,
+          onTap: () {
+            Get.back();
+            controller.addDocumentToFolder(folderName);
+          },
+        ),
+        const Divider(),
+        _buildOptionTile(
+          icon: Icons.note_add,
+          title: 'Create Note',
+          subtitle: 'Add a text note',
+          color: Colors.purple,
+          onTap: () {
+            Get.back();
+            controller.addNoteToFolder(folderName);
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildAudioFolderOptions(
+    VaultController controller,
+    String folderName,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Add to Audio',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        _buildOptionTile(
+          icon: Icons.audio_file,
+          title: 'Upload Audio',
+          subtitle: 'MP3, WAV, AAC, etc.',
+          color: Colors.teal,
+          onTap: () {
+            Get.back();
+            controller.addAudioToFolder(folderName);
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildCustomFolderOptions(
+    VaultController controller,
+    String folderName,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Add to Folder',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        _buildOptionTile(
+          icon: Icons.image,
+          title: 'Add Image',
+          subtitle: 'Upload or capture image',
+          color: Colors.blue,
+          onTap: () {
+            Get.back();
+            _showImageOptions(controller, folderName);
+          },
+        ),
+        const Divider(),
+        _buildOptionTile(
+          icon: Icons.videocam,
+          title: 'Add Video',
+          subtitle: 'Upload video',
+          color: Colors.red,
+          onTap: () {
+            Get.back();
+            controller.addVideoToFolder(folderName);
+          },
+        ),
+        const Divider(),
+        _buildOptionTile(
+          icon: Icons.audiotrack,
+          title: 'Add Audio',
+          subtitle: 'Upload audio file',
+          color: Colors.teal,
+          onTap: () {
+            Get.back();
+            controller.addAudioToFolder(folderName);
+          },
+        ),
+        const Divider(),
+        _buildOptionTile(
+          icon: Icons.insert_drive_file,
+          title: 'Add Document',
+          subtitle: 'PDF, DOC, TXT, etc.',
+          color: Colors.green,
+          onTap: () {
+            Get.back();
+            controller.addDocumentToFolder(folderName);
+          },
+        ),
+        const Divider(),
+        _buildOptionTile(
+          icon: Icons.note_add,
+          title: 'Add Note',
+          subtitle: 'Create a text note',
+          color: Colors.purple,
+          onTap: () {
+            Get.back();
+            controller.addNoteToFolder(folderName);
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  void _showImageOptions(VaultController controller, String folderName) {
     Get.bottomSheet(
       Container(
         padding: const EdgeInsets.all(20),
@@ -279,51 +471,29 @@ class VaultHomeScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Add to Vault',
+              'Add Image',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
             _buildOptionTile(
               icon: Icons.photo_library,
-              title: 'Images',
-              subtitle: 'Add photos from gallery',
+              title: 'Upload from Gallery',
+              subtitle: 'Select from gallery',
               color: Colors.blue,
               onTap: () {
                 Get.back();
-                controller.addImage();
+                controller.addImageToFolder(folderName);
               },
             ),
             const Divider(),
             _buildOptionTile(
-              icon: Icons.videocam,
-              title: 'Videos',
-              subtitle: 'Add videos from gallery',
-              color: Colors.red,
+              icon: Icons.camera_alt,
+              title: 'Capture with Camera',
+              subtitle: 'Take a new photo',
+              color: Colors.orange,
               onTap: () {
                 Get.back();
-                controller.addVideo();
-              },
-            ),
-            const Divider(),
-            _buildOptionTile(
-              icon: Icons.insert_drive_file,
-              title: 'Files',
-              subtitle: 'Add documents, PDFs, etc.',
-              color: Colors.green,
-              onTap: () {
-                Get.back();
-                controller.addFile();
-              },
-            ),
-            const Divider(),
-            _buildOptionTile(
-              icon: Icons.note_add,
-              title: 'Secure Note',
-              subtitle: 'Create an encrypted text note',
-              color: Colors.purple,
-              onTap: () {
-                Get.back();
-                _showCreateNoteDialog(controller);
+                controller.captureImageToFolder(folderName);
               },
             ),
             const SizedBox(height: 20),
@@ -355,12 +525,12 @@ class VaultHomeScreen extends StatelessWidget {
     );
   }
 
-  void _showCreateFolderDialog(VaultController controller) {
+  void _showCreateCustomFolderDialog(VaultController controller) {
     final TextEditingController folderNameController = TextEditingController();
 
     Get.dialog(
       AlertDialog(
-        title: const Text('Create New Folder'),
+        title: const Text('Create Custom Folder'),
         content: TextField(
           controller: folderNameController,
           autofocus: true,
@@ -375,60 +545,11 @@ class VaultHomeScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               if (folderNameController.text.trim().isNotEmpty) {
-                controller.createFolder(folderNameController.text.trim());
+                controller.createCustomFolder(folderNameController.text.trim());
               }
               Get.back();
             },
             child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCreateNoteDialog(VaultController controller) {
-    final TextEditingController titleController = TextEditingController();
-    final TextEditingController contentController = TextEditingController();
-
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Create Secure Note'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                hintText: 'Note title',
-                prefixIcon: Icon(Icons.title),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: contentController,
-              decoration: const InputDecoration(
-                hintText: 'Note content',
-                prefixIcon: Icon(Icons.note),
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 5,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (titleController.text.trim().isNotEmpty) {
-                controller.createSecureNote(
-                  titleController.text.trim(),
-                  contentController.text,
-                );
-              }
-              Get.back();
-            },
-            child: const Text('Save'),
           ),
         ],
       ),
@@ -517,7 +638,8 @@ class VaultHomeScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               Get.back();
-              controller.restoreItem(item);
+              // Add restore functionality
+              Get.snackbar('Info', 'Restore functionality coming soon');
             },
             child: const Text('Restore'),
           ),

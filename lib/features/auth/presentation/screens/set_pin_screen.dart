@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
-import '../../../vault/presentation/screens/vault_home_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
 import '../../../../core/widgets/custom_button.dart';
@@ -27,10 +26,7 @@ class _SetPinScreenState extends State<SetPinScreen> {
   @override
   void initState() {
     super.initState();
-    // Ensure AuthController is registered
-    _authController = Get.isRegistered<AuthController>()
-        ? Get.find<AuthController>()
-        : Get.put(AuthController());
+    _authController = Get.find<AuthController>();
   }
 
   @override
@@ -231,15 +227,11 @@ class _SetPinScreenState extends State<SetPinScreen> {
       return;
     }
 
-    // Set PIN
     final success = await _authController.setPin(pin);
 
     if (success) {
       // Navigate to vault
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const VaultHomeScreen()),
-      );
+      Get.offAllNamed('/vault');
     } else {
       Get.snackbar(
         'Error',

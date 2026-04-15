@@ -1,4 +1,4 @@
-// lib/app.dart (Improved version with proper dependency order)
+// lib/app.dart
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -15,6 +15,7 @@ import 'core/constants/app_strings.dart';
 import 'config/theme.dart';
 import 'routes/app_routes.dart';
 import 'routes/app_pages.dart';
+import 'features/vault/data/models/vault_item_model_adapter.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -27,8 +28,8 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      initialRoute: AppRoutes.notebook,
-      getPages: AppPages.routes, // FIXED: Use AppPages.routes
+      initialRoute: AppRoutes.notebook, // Change this to notebook
+      getPages: AppPages.routes,
       defaultTransition: Transition.fade,
       transitionDuration: const Duration(milliseconds: 300),
       unknownRoute: GetPage(
@@ -58,36 +59,33 @@ class _AppRootState extends State<AppRoot> {
 
   Future<void> _initializeApp() async {
     try {
-      // Step 1: Initialize Hive
-      await Hive.initFlutter();
+      // Register Hive adapter
+      if (!Hive.isAdapterRegistered(1)) {
+        Hive.registerAdapter(VaultItemModelAdapter());
+        print('✅ Registered VaultItemModelAdapter');
+      }
 
-      // Step 2: Initialize and register LocalStorageService
+      // Initialize services
       final localStorage = LocalStorageService();
       await localStorage.init();
       Get.put<LocalStorageService>(localStorage);
 
-      // Step 3: Initialize SecureStorageService
       final secureStorage = SecureStorageService();
       Get.put<SecureStorageService>(secureStorage);
 
-      // Step 4: Initialize repositories
+      // Initialize repositories
       final noteRepository = NoteRepository(localStorage);
       final vaultRepository = VaultRepository(localStorage);
+      Get.put<NoteRepository>(noteRepository);
+      Get.put<VaultRepository>(vaultRepository);
 
-      // Step 5: Initialize controllers (order matters if they depend on each other)
-      // AuthController doesn't depend on others
+      // Initialize controllers
       Get.put<AuthController>(AuthController());
-
-      // DisguiseController depends on LocalStorageService
       Get.put<DisguiseController>(DisguiseController());
-
-      // NoteController depends on NoteRepository
       Get.put<NoteController>(NoteController(noteRepository));
-
-      // VaultController depends on VaultRepository
       Get.put<VaultController>(VaultController(vaultRepository));
 
-      // Step 6: Load initial data
+      // Load initial data
       await Get.find<NoteController>().loadNotes();
       await Get.find<VaultController>().loadItems();
 
@@ -95,9 +93,9 @@ class _AppRootState extends State<AppRoot> {
         _isInitialized = true;
       });
 
-      debugPrint('App initialized successfully');
+      debugPrint('✅ App initialized successfully');
     } catch (e) {
-      debugPrint('Error initializing app: $e');
+      debugPrint('❌ Error initializing app: $e');
       _showInitializationError();
     }
   }
@@ -147,7 +145,6 @@ class _AppRootState extends State<AppRoot> {
   }
 }
 
-// Add NotFoundScreen
 class NotFoundScreen extends StatelessWidget {
   const NotFoundScreen({Key? key}) : super(key: key);
 

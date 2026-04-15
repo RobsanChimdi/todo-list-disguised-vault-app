@@ -321,7 +321,6 @@ class _UploadScreenState extends State<UploadScreen> {
             fileType = 'document';
           }
 
-          // Call the add method
           await _controller.addFileToVault(file, fileType);
           successCount++;
         } catch (e) {
@@ -339,7 +338,7 @@ class _UploadScreenState extends State<UploadScreen> {
       );
 
       if (successCount > 0) {
-        Navigator.pop(context);
+        Get.back();
       }
     } catch (e) {
       Get.snackbar(

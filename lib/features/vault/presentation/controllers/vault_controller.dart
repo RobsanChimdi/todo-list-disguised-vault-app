@@ -1,27 +1,37 @@
+// lib/features/vault/presentation/controllers/vault_controller.dart
+
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:my_first_app/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:path/path.dart' as path;
-
-import '../../../../core/services/media_service.dart';
+import '../../../../core/services/encryption_helper.dart';
+import '../../../../core/services/local_storage_service.dart';
 import '../../data/repositories/vault_repository.dart';
 import '../../domain/entities/vault_item.dart';
-import '../../../auth/presentation/controllers/auth_controller.dart';
+import 'package:share_plus/share_plus.dart';
 
 class VaultController extends GetxController {
   final VaultRepository _repository;
-  final MediaService _mediaService = MediaService();
+  final EncryptionHelper _encryptionHelper = EncryptionHelper();
+  final ImagePicker _imagePicker = ImagePicker();
 
-  final RxList<VaultItem> items = <VaultItem>[].obs;
-  final RxBool isLoading = false.obs;
-  final RxBool isProcessing = false.obs;
+  // Observable state
+  var items = <VaultItem>[].obs;
+  var isLoading = false.obs;
+  var currentFolder = ''.obs;
+  var selectedFilter = 'all'.obs;
+  var searchQuery = ''.obs;
 
-  final RxString searchQuery = ''.obs;
-  final RxString selectedFilter = 'all'.obs;
-  final RxString currentFolder = ''.obs;
+  // Predefined folders
+  static const List<String> predefinedFolders = [
+    'Images',
+    'Videos',
+    'Documents',
+    'Audio',
+  ];
 
   VaultController(this._repository);
 
@@ -31,578 +41,106 @@ class VaultController extends GetxController {
     loadItems();
   }
 
-  @override
-  void onClose() {
-    // Clean up any pending operations
-    super.onClose();
-  }
-
-  /// ================= LOAD =================
-
   Future<void> loadItems() async {
-    if (isLoading.value) return;
-
+    isLoading.value = true;
     try {
-      isLoading.value = true;
-      final data = await _repository.getAllItems();
-      items.assignAll(data);
-      print('✅ Loaded ${data.length} items from vault');
+      final allItems = await _repository.getAllItems();
+      items.value = allItems;
+      print('✅ Loaded ${allItems.length} items');
+
+      // Initialize predefined folders after loading
+      await _initializePredefinedFolders();
     } catch (e) {
-      debugPrint('Load error: $e');
-      Get.snackbar(
-        'Error',
-        'Failed to load vault items',
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 2),
-      );
+      print('Error loading items: $e');
+      Get.snackbar('Error', 'Failed to load vault items');
     } finally {
       isLoading.value = false;
     }
   }
 
-  /// Refresh items (manual refresh)
+  Future<void> _initializePredefinedFolders() async {
+    try {
+      final existingFolders = items
+          .where((item) => item.fileType == 'folder')
+          .toList();
+      final existingFolderNames = existingFolders.map((f) => f.name).toList();
+
+      print('Existing folders: $existingFolderNames');
+
+      for (final folderName in predefinedFolders) {
+        if (!existingFolderNames.contains(folderName)) {
+          print('Creating predefined folder: $folderName');
+          await createPredefinedFolder(folderName);
+        }
+      }
+    } catch (e) {
+      print('Error initializing predefined folders: $e');
+    }
+  }
+
+  Future<void> createPredefinedFolder(String folderName) async {
+    try {
+      final folderItem = VaultItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: folderName,
+        filePath: null,
+        fileSize: 0,
+        fileType: 'folder',
+        createdAt: DateTime.now(),
+        isEncrypted: false,
+        parentFolder: null,
+      );
+
+      await _repository.addItem(folderItem, File(''));
+      print('✅ Created predefined folder: $folderName');
+
+      // Refresh items to show the new folder
+      final allItems = await _repository.getAllItems();
+      items.value = allItems;
+    } catch (e) {
+      print('Error creating predefined folder $folderName: $e');
+    }
+  }
+
   Future<void> refreshItems() async {
     await loadItems();
   }
 
-  /// ================= FILE TYPE DETECTION =================
-
-  String _getFileTypeFromPath(String filePath) {
-    final extension = path
-        .extension(filePath)
-        .toLowerCase()
-        .replaceFirst('.', '');
-
-    // Images
-    if ([
-      'jpg',
-      'jpeg',
-      'png',
-      'gif',
-      'webp',
-      'heic',
-      'bmp',
-    ].contains(extension)) {
-      return 'image/$extension';
-    }
-
-    // Videos
-    if ([
-      'mp4',
-      'mov',
-      'avi',
-      'mkv',
-      'wmv',
-      'flv',
-      'webm',
-    ].contains(extension)) {
-      return 'video/$extension';
-    }
-
-    // Audio
-    if (['mp3', 'wav', 'aac', 'flac', 'm4a', 'ogg'].contains(extension)) {
-      return 'audio/$extension';
-    }
-
-    // Documents
-    if (extension == 'pdf') return 'application/pdf';
-    if (['doc', 'docx'].contains(extension)) return 'application/msword';
-    if (['xls', 'xlsx'].contains(extension)) return 'application/vnd.ms-excel';
-    if (['ppt', 'pptx'].contains(extension))
-      return 'application/vnd.ms-powerpoint';
-    if (['txt', 'md', 'rtf'].contains(extension)) return 'text/plain';
-
-    // Default
-    return 'application/octet-stream';
-  }
-
-  String _getSimpleFileType(String mimeType) {
-    if (mimeType.startsWith('image')) return 'image';
-    if (mimeType.startsWith('video')) return 'video';
-    if (mimeType.startsWith('audio')) return 'audio';
-    if (mimeType == 'application/pdf') return 'application/pdf';
-    if (mimeType.contains('document') || mimeType.contains('text'))
-      return 'document';
-    return 'document';
-  }
-
-  /// ================= ADD FILE =================
-
-  Future<void> addFile() async {
-    try {
-      final file = await _mediaService.pickFile();
-      if (file != null) {
-        await _addFile(file);
-      }
-    } catch (e) {
-      debugPrint('Pick file error: $e');
-      Get.snackbar('Error', 'Failed to pick file');
-    }
-  }
-
-  Future<void> addImage() async {
-    try {
-      final file = await _mediaService.pickImage();
-      if (file != null) {
-        await _addFile(file);
-      }
-    } catch (e) {
-      debugPrint('Pick image error: $e');
-      Get.snackbar('Error', 'Failed to pick image');
-    }
-  }
-
-  Future<void> addVideo() async {
-    try {
-      final file = await _mediaService.pickVideo();
-      if (file != null) {
-        await _addFile(file);
-      }
-    } catch (e) {
-      debugPrint('Pick video error: $e');
-      Get.snackbar('Error', 'Failed to pick video');
-    }
-  }
-
-  Future<void> addFileToVault(File file, String mimeType) async {
-    await _addFile(file);
-  }
-
-  Future<void> _addFile(File file) async {
-    if (isProcessing.value) {
-      Get.snackbar('Please wait', 'Previous operation still in progress');
-      return;
-    }
-
-    try {
-      isProcessing.value = true;
-      isLoading.value = true;
-
-      // Get file info
-      final fileName = path.basename(file.path);
-      final fileSize = await file.length();
-      final mimeType = _getFileTypeFromPath(file.path);
-      final simpleType = _getSimpleFileType(mimeType);
-
-      // Create vault item
-      final item = VaultItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: fileName,
-        filePath: null, // Will be set by repository
-        fileType: simpleType,
-        fileSize: fileSize,
-        createdAt: DateTime.now(),
-        lastOpened: null,
-        isEncrypted: true,
-        thumbnailPath: null,
-        metadata: {
-          'folder': currentFolder.value.isEmpty ? 'root' : currentFolder.value,
-          'originalMimeType': mimeType,
-          'originalPath': file.path,
-        },
-      );
-
-      // Move file to vault (THIS DELETES THE ORIGINAL)
-      final savedItem = await _repository.addItem(item, file);
-
-      // ✅ Insert at beginning of list
-      items.insert(0, savedItem);
-
-      Get.snackbar(
-        'Success',
-        'File moved to vault: $fileName',
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 2),
-      );
-    } catch (e) {
-      debugPrint('Add file error: $e');
-      Get.snackbar(
-        'Error',
-        'Failed to add file: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 3),
-      );
-    } finally {
-      isLoading.value = false;
-      isProcessing.value = false;
-    }
-  }
-
-  /// ================= BATCH IMPORT =================
-
-  Future<void> batchImport(List<XFile> files) async {
-    if (files.isEmpty) return;
-
-    if (isProcessing.value) {
-      Get.snackbar('Please wait', 'Previous operation still in progress');
-      return;
-    }
-
-    int success = 0;
-    int fail = 0;
-    final List<VaultItem> importedItems = [];
-
-    try {
-      isProcessing.value = true;
-      isLoading.value = true;
-
-      for (final xFile in files) {
-        try {
-          final file = File(xFile.path);
-          final fileName = path.basename(file.path);
-          final fileSize = await file.length();
-          final mimeType = _getFileTypeFromPath(file.path);
-          final simpleType = _getSimpleFileType(mimeType);
-
-          final item = VaultItem(
-            id:
-                DateTime.now().millisecondsSinceEpoch.toString() +
-                success.toString(),
-            name: fileName,
-            filePath: null,
-            fileType: simpleType,
-            fileSize: fileSize,
-            createdAt: DateTime.now(),
-            lastOpened: null,
-            isEncrypted: true,
-            thumbnailPath: null,
-            metadata: {
-              'folder': currentFolder.value.isEmpty
-                  ? 'root'
-                  : currentFolder.value,
-              'originalMimeType': mimeType,
-            },
-          );
-
-          final savedItem = await _repository.addItem(item, file);
-          importedItems.add(savedItem);
-          success++;
-
-          // Small delay to prevent UI freeze
-          await Future.delayed(const Duration(milliseconds: 50));
-        } catch (e) {
-          fail++;
-          debugPrint('Batch import error for ${xFile.name}: $e');
-        }
-      }
-
-      // Add all successfully imported items to the list
-      if (importedItems.isNotEmpty) {
-        items.insertAll(0, importedItems);
-      }
-
-      Get.snackbar(
-        'Import Complete',
-        '$success success, $fail failed',
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 3),
-      );
-    } catch (e) {
-      debugPrint('Batch import error: $e');
-      Get.snackbar('Error', 'Batch import failed');
-    } finally {
-      isLoading.value = false;
-      isProcessing.value = false;
-    }
-  }
-
-  /// ================= FOLDER OPERATIONS =================
-
-  Future<void> createFolder(String folderName) async {
-    if (folderName.trim().isEmpty) {
-      Get.snackbar('Error', 'Folder name required');
-      return;
-    }
-
-    if (isProcessing.value) {
-      Get.snackbar('Please wait', 'Previous operation still in progress');
-      return;
-    }
-
-    try {
-      isProcessing.value = true;
-
-      final folderItem = VaultItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: folderName.trim(),
-        filePath: null,
-        fileType: 'folder',
-        fileSize: 0,
-        createdAt: DateTime.now(),
-        lastOpened: null,
-        isEncrypted: false,
-        thumbnailPath: null,
-        metadata: {
-          'folder': currentFolder.value.isEmpty ? 'root' : currentFolder.value,
-        },
-      );
-
-      await _repository.updateItem(folderItem);
-
-      // Insert at beginning
-      items.insert(0, folderItem);
-
-      Get.snackbar(
-        'Success',
-        'Folder created: $folderName',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } catch (e) {
-      debugPrint('Create folder error: $e');
-      Get.snackbar('Error', 'Failed to create folder');
-    } finally {
-      isProcessing.value = false;
-    }
-  }
-
-  Future<void> moveItem(String id, String newFolder) async {
-    if (isProcessing.value) {
-      Get.snackbar('Please wait', 'Previous operation still in progress');
-      return;
-    }
-
-    try {
-      isProcessing.value = true;
-
-      final item = await _repository.getItemById(id);
-      if (item == null) {
-        throw Exception('Item not found');
-      }
-
-      final updated = item.copyWith(
-        metadata: {...?item.metadata, 'folder': newFolder},
-      );
-
-      await _repository.updateItem(updated);
-
-      final index = items.indexWhere((e) => e.id == id);
-      if (index != -1) {
-        items[index] = updated;
-      }
-
-      Get.snackbar(
-        'Success',
-        'Item moved to ${newFolder == 'root' ? 'Root' : newFolder}',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } catch (e) {
-      debugPrint('Move item error: $e');
-      Get.snackbar('Error', 'Failed to move item');
-    } finally {
-      isProcessing.value = false;
-    }
-  }
-
-  Future<void> deleteFolder(String folderId) async {
-    final item = items.firstWhereOrNull((e) => e.id == folderId);
-    if (item == null || item.fileType != 'folder') return;
-
-    // Get all items in this folder
-    final folderName = item.name;
-    final itemsInFolder = items
-        .where((e) => e.metadata?['folder'] == folderName)
-        .toList();
-
-    if (itemsInFolder.isNotEmpty) {
-      final shouldDelete = await Get.dialog<bool>(
-        AlertDialog(
-          title: const Text('Delete Folder'),
-          content: Text(
-            'Folder "$folderName" contains ${itemsInFolder.length} items. Delete them too?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Get.back(result: false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Get.back(result: true),
-              child: const Text('Delete All'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldDelete != true) return;
-
-      // Delete all items in folder
-      for (final itemInFolder in itemsInFolder) {
-        await deleteItem(itemInFolder);
-      }
-    }
-
-    // Delete the folder itself
-    await deleteItem(item);
-  }
-
-  /// ================= DELETE =================
-
-  Future<void> deleteItem(VaultItem item) async {
-    if (isProcessing.value) {
-      Get.snackbar('Please wait', 'Previous operation still in progress');
-      return;
-    }
-
-    // Confirm deletion
-    final confirm = await Get.dialog<bool>(
-      AlertDialog(
-        title: const Text('Delete Item'),
-        content: Text('Are you sure you want to delete "${item.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Get.back(result: true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      isProcessing.value = true;
-
-      await _repository.deleteItem(item.id, permanent: true);
-
-      items.removeWhere((e) => e.id == item.id);
-
-      Get.snackbar(
-        'Deleted',
-        item.name,
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 1),
-      );
-    } catch (e) {
-      debugPrint('Delete error: $e');
-      Get.snackbar('Error', 'Failed to delete item');
-    } finally {
-      isProcessing.value = false;
-    }
-  }
-
-  /// ================= SHARE =================
-
-  Future<void> shareItem(VaultItem item) async {
-    if (isProcessing.value) {
-      Get.snackbar('Please wait', 'Previous operation still in progress');
-      return;
-    }
-
-    File? tempFile;
-
-    try {
-      isProcessing.value = true;
-
-      // Update last opened time
-      await _repository.updateItem(item.copyWith(lastOpened: DateTime.now()));
-
-      // Get decrypted temporary file
-      tempFile = await _repository.getDecryptedFile(item);
-
-      if (!await tempFile.exists()) {
-        throw Exception('File missing');
-      }
-
-      // Share the file
-      await Share.shareXFiles([
-        XFile(tempFile.path),
-      ], text: 'Sharing from Vault');
-
-      Get.snackbar(
-        'Success',
-        'File shared successfully',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } catch (e) {
-      debugPrint('Share error: $e');
-      Get.snackbar('Error', 'Failed to share file: ${e.toString()}');
-    } finally {
-      isProcessing.value = false;
-      // Clean up temp file
-      if (tempFile != null && await tempFile.exists()) {
-        try {
-          await tempFile.delete();
-        } catch (e) {
-          debugPrint('Failed to delete temp file: $e');
-        }
-      }
-    }
-  }
-
-  /// ================= RESTORE =================
-
-  Future<void> restoreItem(VaultItem item) async {
-    if (item.originalPath == null) {
-      Get.snackbar('Error', 'Original path not found');
-      return;
-    }
-
-    if (isProcessing.value) {
-      Get.snackbar('Please wait', 'Previous operation still in progress');
-      return;
-    }
-
-    // Confirm restoration
-    final confirm = await Get.dialog<bool>(
-      AlertDialog(
-        title: const Text('Restore File'),
-        content: Text(
-          'Restore "${item.name}" to original location?\n\n${item.originalPath}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Get.back(result: true),
-            child: const Text('Restore'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      isProcessing.value = true;
-
-      await _repository.restoreToOriginalLocation(item);
-
-      // Remove from list
-      items.removeWhere((e) => e.id == item.id);
-
-      Get.snackbar(
-        'Success',
-        'File restored to original location',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } catch (e) {
-      debugPrint('Restore error: $e');
-      Get.snackbar('Error', 'Failed to restore file: ${e.toString()}');
-    } finally {
-      isProcessing.value = false;
-    }
-  }
-
-  /// ================= FILTERED ITEMS =================
-
   List<VaultItem> getFilteredItems() {
-    final folderPath = currentFolder.value.isEmpty
-        ? 'root'
-        : currentFolder.value;
-
     var filtered = items.where((item) {
-      final itemFolder = item.metadata?['folder'] ?? 'root';
+      // Filter by current folder
+      if (currentFolder.value.isNotEmpty) {
+        if (item.parentFolder != currentFolder.value) {
+          return false;
+        }
+      } else {
+        // In root, only show folders (items without parent folder)
+        if (item.parentFolder != null && item.parentFolder!.isNotEmpty) {
+          return false;
+        }
+      }
 
-      // Filter by folder
-      if (itemFolder != folderPath) return false;
+      // Filter by type
+      if (selectedFilter.value != 'all') {
+        if (selectedFilter.value == 'images' &&
+            !item.fileType.startsWith('image')) {
+          return false;
+        }
+        if (selectedFilter.value == 'videos' && item.fileType != 'video') {
+          return false;
+        }
+        if (selectedFilter.value == 'documents' &&
+            ![
+              'application/pdf',
+              'document',
+              'text',
+              'note',
+            ].contains(item.fileType)) {
+          return false;
+        }
+      }
 
-      // Filter by search query
+      // Search filter
       if (searchQuery.value.isNotEmpty) {
         return item.name.toLowerCase().contains(
           searchQuery.value.toLowerCase(),
@@ -612,173 +150,408 @@ class VaultController extends GetxController {
       return true;
     }).toList();
 
-    // Filter by type
-    if (selectedFilter.value != 'all') {
-      filtered = filtered.where((item) {
-        // Always show folders
-        if (item.fileType == 'folder') return true;
-
-        switch (selectedFilter.value) {
-          case 'images':
-            return item.fileType == 'image';
-          case 'videos':
-            return item.fileType == 'video';
-          case 'audio':
-            return item.fileType == 'audio';
-          case 'documents':
-            return item.fileType == 'application/pdf' ||
-                item.fileType == 'document' ||
-                item.fileType.contains('text');
-          default:
-            return true;
-        }
-      }).toList();
-    }
-
     // Sort: folders first, then by date
     filtered.sort((a, b) {
-      // Folders first
       if (a.fileType == 'folder' && b.fileType != 'folder') return -1;
       if (a.fileType != 'folder' && b.fileType == 'folder') return 1;
-      // Then by creation date (newest first)
       return b.createdAt.compareTo(a.createdAt);
     });
 
     return filtered;
   }
 
-  /// Get items count by type
-  Map<String, int> getItemsCount() {
-    final folders = items.where((i) => i.fileType == 'folder').length;
-    final images = items.where((i) => i.fileType == 'image').length;
-    final videos = items.where((i) => i.fileType == 'video').length;
-    final documents = items
-        .where(
-          (i) =>
-              i.fileType == 'application/pdf' ||
-              i.fileType == 'document' ||
-              i.fileType.contains('text'),
-        )
-        .length;
+  Future<void> addImageToFolder(String folderName) async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
 
-    return {
-      'total': items.length,
-      'folders': folders,
-      'images': images,
-      'videos': videos,
-      'documents': documents,
-    };
+      if (image != null) {
+        await _addFileToFolder(File(image.path), folderName, 'image');
+      }
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to pick image: $e');
+    }
   }
 
-  /// ================= NAVIGATION =================
+  Future<void> captureImageToFolder(String folderName) async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        await _addFileToFolder(File(image.path), folderName, 'image');
+      }
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to capture image: $e');
+    }
+  }
+
+  Future<void> addVideoToFolder(String folderName) async {
+    try {
+      final XFile? video = await _imagePicker.pickVideo(
+        source: ImageSource.gallery,
+      );
+
+      if (video != null) {
+        await _addFileToFolder(File(video.path), folderName, 'video');
+      }
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to pick video: $e');
+    }
+  }
+
+  Future<void> addAudioToFolder(String folderName) async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        await _addFileToFolder(
+          File(result.files.single.path!),
+          folderName,
+          'audio',
+        );
+      }
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to pick audio: $e');
+    }
+  }
+
+  Future<void> addDocumentToFolder(String folderName) async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: [
+          'pdf',
+          'doc',
+          'docx',
+          'txt',
+          'xls',
+          'xlsx',
+          'ppt',
+          'pptx',
+        ],
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final extension = file.path.split('.').last.toLowerCase();
+        String fileType = 'document';
+
+        if (extension == 'pdf') {
+          fileType = 'application/pdf';
+        } else if (['doc', 'docx'].contains(extension)) {
+          fileType = 'application/msword';
+        }
+
+        await _addFileToFolder(file, folderName, fileType);
+      }
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to pick document: $e');
+    }
+  }
+
+  Future<void> addNoteToFolder(String folderName) async {
+    final titleController = TextEditingController();
+    final contentController = TextEditingController();
+
+    await Get.dialog(
+      AlertDialog(
+        title: const Text('Create Note'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(
+                hintText: 'Note title',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: contentController,
+              decoration: const InputDecoration(
+                hintText: 'Note content',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 5,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (titleController.text.trim().isNotEmpty) {
+                isLoading.value = true;
+                try {
+                  final tempDir = await getTemporaryDirectory();
+                  final noteFile = File(
+                    '${tempDir.path}/${titleController.text.trim()}.txt',
+                  );
+                  await noteFile.writeAsString(contentController.text);
+
+                  await _addFileToFolder(noteFile, folderName, 'text');
+
+                  if (await noteFile.exists()) {
+                    await noteFile.delete();
+                  }
+
+                  if (Get.isDialogOpen ?? false) {
+                    Get.back();
+                  }
+                  Get.snackbar('Success', 'Note created successfully');
+                } catch (e) {
+                  Get.snackbar('Error', 'Failed to create note: $e');
+                } finally {
+                  isLoading.value = false;
+                }
+              } else {
+                Get.back();
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addFileToFolder(
+    File file,
+    String folderName,
+    String fileType,
+  ) async {
+    isLoading.value = true;
+    try {
+      final vaultItem = VaultItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: file.path.split('/').last,
+        filePath: '',
+        fileSize: await file.length(),
+        fileType: fileType,
+        createdAt: DateTime.now(),
+        isEncrypted: true,
+        parentFolder: folderName,
+        originalPath: file.path,
+      );
+
+      await _repository.addItem(vaultItem, file);
+      await loadItems();
+
+      Get.snackbar(
+        'Success',
+        'File added to $folderName folder',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to add file: $e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> addFileToVault(File file, String fileType) async {
+    try {
+      final vaultItem = VaultItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: file.path.split('/').last,
+        filePath: '',
+        fileSize: await file.length(),
+        fileType: fileType,
+        createdAt: DateTime.now(),
+        isEncrypted: true,
+        parentFolder: currentFolder.value.isNotEmpty
+            ? currentFolder.value
+            : null,
+        originalPath: file.path,
+      );
+
+      await _repository.addItem(vaultItem, file);
+      await loadItems();
+
+      Get.snackbar(
+        'Success',
+        'File added successfully',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to add file: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> createCustomFolder(String folderName) async {
+    if (predefinedFolders.contains(folderName)) {
+      Get.snackbar('Error', 'Folder name already exists');
+      return;
+    }
+
+    // Check if folder already exists
+    final existingFolder = items.any(
+      (item) =>
+          item.fileType == 'folder' &&
+          item.name == folderName &&
+          item.parentFolder == currentFolder.value,
+    );
+
+    if (existingFolder) {
+      Get.snackbar('Error', 'A folder with this name already exists');
+      return;
+    }
+
+    isLoading.value = true;
+    try {
+      final folderItem = VaultItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: folderName,
+        filePath: null,
+        fileSize: 0,
+        fileType: 'folder',
+        createdAt: DateTime.now(),
+        isEncrypted: false,
+        parentFolder: currentFolder.value.isEmpty ? null : currentFolder.value,
+      );
+
+      await _repository.addItem(folderItem, File(''));
+      await loadItems();
+
+      Get.snackbar('Success', 'Folder "$folderName" created');
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to create folder: ${e.toString()}');
+      print('Error creating folder: $e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
 
   void navigateToFolder(String folderName) {
     currentFolder.value = folderName;
+    selectedFilter.value = 'all';
+    searchQuery.value = '';
   }
 
   void goToRoot() {
     currentFolder.value = '';
+    selectedFilter.value = 'all';
+    searchQuery.value = '';
   }
 
-  void navigateBack() {
-    if (currentFolder.value.isNotEmpty) {
-      // Navigate to parent folder
-      final parent = currentFolder.value.split('/').last;
-      currentFolder.value = parent == currentFolder.value ? '' : parent;
-    }
-  }
-
-  /// ================= STATS =================
-
-  Future<Map<String, int>> getStats() async {
-    return await _repository.getStats();
-  }
-
-  Future<int> getTotalSize() async {
-    return await _repository.getTotalSize();
-  }
-
-  Future<String> getFormattedTotalSize() async {
-    final size = await getTotalSize();
-    return _formatFileSize(size);
-  }
-
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024)
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-  }
-
-  Future<void> cleanupOrphanedFiles() async {
-    if (isProcessing.value) {
-      Get.snackbar('Please wait', 'Previous operation still in progress');
-      return;
-    }
-
-    try {
-      isProcessing.value = true;
-
-      final deletedCount = await _repository.cleanupOrphanedFiles();
-
-      if (deletedCount > 0) {
-        Get.snackbar(
-          'Cleanup Complete',
-          'Removed $deletedCount orphaned files',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      } else {
-        Get.snackbar('Cleanup', 'No orphaned files found');
-      }
-    } catch (e) {
-      debugPrint('Cleanup error: $e');
-      Get.snackbar('Error', 'Cleanup failed');
-    } finally {
-      isProcessing.value = false;
-    }
-  }
-
-  void logout() {
-    Get.find<AuthController>().logoutFromVault();
+  void setFilter(String filter) {
+    selectedFilter.value = filter;
   }
 
   void setSearchQuery(String query) {
     searchQuery.value = query;
   }
 
-  /// Set filter
-  void setFilter(String filter) {
-    selectedFilter.value = filter;
+  Future<void> deleteItem(VaultItem item) async {
+    try {
+      await _repository.deleteItem(item.id);
+      await loadItems();
+      Get.snackbar('Success', '${item.name} deleted');
+    } catch (e) {
+      Get.snackbar('Error', 'Failed to delete: $e');
+    }
   }
 
-  /// Get decrypted file for viewing
   Future<File?> getDecryptedFile(VaultItem item) async {
     try {
       return await _repository.getDecryptedFile(item);
     } catch (e) {
-      debugPrint('Get decrypted file error: $e');
-      Get.snackbar('Error', 'Failed to open file');
+      Get.snackbar('Error', 'Failed to decrypt file: $e');
       return null;
     }
   }
 
-  /// Create secure note
-  Future<void> createSecureNote(String title, String content) async {
+  // Add this method to VaultController class
+
+  Future<void> shareItem(VaultItem item) async {
     try {
-      // Create a temporary text file
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/$title.txt');
-      await tempFile.writeAsString(content);
+      Get.dialog(
+        const Center(child: CircularProgressIndicator()),
+        barrierDismissible: false,
+      );
 
-      // Add to vault
-      await _addFile(tempFile);
+      final file = await getDecryptedFile(item);
 
-      // Clean up temp file
-      await tempFile.delete();
+      Get.back(); // Close loading dialog
+
+      if (file != null && await file.exists()) {
+        // Create a temporary copy for sharing
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File(
+          '${tempDir.path}/share_${DateTime.now().millisecondsSinceEpoch}_${item.name}',
+        );
+
+        // Copy the file to temp location
+        await file.copy(tempFile.path);
+
+        // Share the file
+        await Share.shareXFiles([
+          XFile(tempFile.path),
+        ], text: 'Sharing from Secure Vault');
+
+        // Delete temp file after sharing
+        Future.delayed(const Duration(seconds: 30), () async {
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+          }
+        });
+      } else {
+        Get.snackbar('Error', 'Failed to share file: File not found');
+      }
     } catch (e) {
-      debugPrint('Create note error: $e');
-      Get.snackbar('Error', 'Failed to create secure note');
+      Get.back(); // Close loading dialog if still open
+      print('Share error: $e');
+      Get.snackbar('Error', 'Failed to share file: $e');
+    }
+  }
+  // In vault_controller.dart, update the logout method:
+
+  void logout() async {
+    try {
+      // Show confirmation dialog first
+      final shouldLogout = await Get.dialog<bool>(
+        AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back(result: false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Get.back(result: true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Logout'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldLogout == true) {
+        // Clear any sensitive data
+        items.clear();
+        currentFolder.value = '';
+        selectedFilter.value = 'all';
+        searchQuery.value = '';
+
+        // Call auth controller logout
+        final authController = Get.find<AuthController>();
+        await authController.logout();
+      }
+    } catch (e) {
+      print('Logout error: $e');
+      Get.snackbar('Error', 'Failed to logout');
     }
   }
 }

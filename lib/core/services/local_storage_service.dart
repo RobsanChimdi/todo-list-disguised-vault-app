@@ -3,18 +3,20 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/foundation.dart';
 import '../../features/vault/data/models/vault_item_model.dart';
+import '../../features/vault/data/models/vault_item_model_adapter.dart';
 
 class LocalStorageService {
   // Box names
   static const String notesBox = 'notes_box';
   static const String settingsBox = 'settings_box';
   static const String vaultBox = 'vault_box';
-  static const String vaultItemsBox = 'vault_items';
+  static const String vaultItemsBox =
+      'vault_items_box'; // Changed to avoid conflict
 
   late Box _notesBox;
   late Box _settingsBox;
   late Box _vaultBox;
-  late Box _vaultItemsBox;
+  late Box<VaultItemModel> _vaultItemsBox;
 
   bool _isInitialized = false;
   final Map<String, Box> _typedBoxes = {};
@@ -31,6 +33,9 @@ class LocalStorageService {
     if (_isInitialized) return;
 
     try {
+      // Initialize Hive
+      await Hive.initFlutter();
+
       // Register adapters BEFORE opening any boxes
       _registerAdapters();
 
@@ -38,7 +43,7 @@ class LocalStorageService {
       _notesBox = await Hive.openBox(notesBox);
       _settingsBox = await Hive.openBox(settingsBox);
       _vaultBox = await Hive.openBox(vaultBox);
-      _vaultItemsBox = await Hive.openBox(vaultItemsBox);
+      _vaultItemsBox = await Hive.openBox<VaultItemModel>(vaultItemsBox);
 
       // Store in typed boxes map
       _typedBoxes[notesBox] = _notesBox;
@@ -316,40 +321,24 @@ class LocalStorageService {
   /// Extract ID from various item types
   String? _getIdFromItem(dynamic item) {
     try {
+      // For VaultItemModel objects
+      if (item is VaultItemModel) {
+        return item.id;
+      }
+
       // Case 1: Item has an 'id' property (Map)
       if (item is Map && item.containsKey('id')) {
         return item['id'].toString();
       }
 
-      // Case 2: Item has an 'id' getter (Model with id property)
+      // Case 2: Item has an 'id' getter
       try {
-        // Use reflection-like approach to get id
-        final id = item.id;
+        final id = (item as dynamic).id;
         if (id != null) {
           return id.toString();
         }
       } catch (e) {
         // No .id property
-      }
-
-      // Case 3: Item has a 'key' property (HiveObject)
-      try {
-        final key = item.key;
-        if (key != null) {
-          return key.toString();
-        }
-      } catch (e) {
-        // No .key property
-      }
-
-      // Case 4: Try to convert to JSON and get id
-      try {
-        final json = (item as dynamic).toJson();
-        if (json is Map && json.containsKey('id')) {
-          return json['id'].toString();
-        }
-      } catch (e) {
-        // No toJson method
       }
 
       // Fallback: generate ID
