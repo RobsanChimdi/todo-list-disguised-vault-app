@@ -96,6 +96,17 @@ class _LockScreenState extends State<LockScreen> {
 
                       const SizedBox(height: 24),
 
+                      // Forgot PIN button
+                      TextButton(
+                        onPressed: _showForgotPinDialog,
+                        child: const Text(
+                          'Forgot PIN?',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
                       // Cancel button
                       TextButton(
                         onPressed: () {
@@ -280,5 +291,223 @@ class _LockScreenState extends State<LockScreen> {
         }
       });
     }
+  }
+
+  void _showForgotPinDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Forgot PIN?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'If you forgot your PIN, you have two options:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              _buildOptionCard(
+                icon: Icons.fingerprint,
+                title: 'Use Biometric Authentication',
+                description:
+                    'If you have biometrics enabled, you can unlock using fingerprint/face ID',
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _authController.authenticateWithBiometrics();
+                  if (_authController.isAuthenticated.value) {
+                    Get.offAllNamed('/vault');
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildOptionCard(
+                icon: Icons.email,
+                title: 'Reset via Email',
+                description:
+                    'We\'ll send a reset link to your registered email',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showResetPinDialog();
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildOptionCard(
+                icon: Icons.logout,
+                title: 'Logout and Re-login',
+                description: 'You\'ll need to enter your master password again',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showLogoutConfirmation();
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildOptionCard({
+    required IconData icon,
+    required String title,
+    required String description,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      elevation: 2,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: AppColors.primary, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.grey[400]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showResetPinDialog() {
+    final emailController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Reset PIN'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter your email address to receive a PIN reset link.',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(
+                  hintText: 'Enter your email',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (emailController.text.isEmpty) {
+                  return;
+                }
+                Navigator.pop(context);
+
+                // Show loading
+                Get.dialog(
+                  const Center(child: CircularProgressIndicator()),
+                  barrierDismissible: false,
+                );
+
+                final success = await _authController.sendPinResetEmail(
+                  emailController.text,
+                );
+
+                Get.back(); // Close loading
+
+                if (success) {
+                  Get.snackbar(
+                    'Success',
+                    'PIN reset link sent to your email',
+                    snackPosition: SnackPosition.BOTTOM,
+                    backgroundColor: Colors.green,
+                    colorText: Colors.white,
+                  );
+                } else {
+                  Get.snackbar(
+                    'Error',
+                    'Failed to send reset link. Email not found.',
+                    snackPosition: SnackPosition.BOTTOM,
+                    backgroundColor: Colors.red,
+                    colorText: Colors.white,
+                  );
+                }
+              },
+              child: const Text('Send Reset Link'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showLogoutConfirmation() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text(
+            'Are you sure you want to logout? You\'ll need to enter your master password to access the vault again.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _authController.logout();
+                Get.offAllNamed('/login');
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
