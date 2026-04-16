@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../domain/entities/vault_item.dart';
 import '../../../../core/constants/app_colors.dart';
+import 'pdf_viewer_screen.dart'; // ADD THIS IMPORT
 
 class FileViewerScreen extends StatefulWidget {
   const FileViewerScreen({Key? key}) : super(key: key);
@@ -372,9 +373,9 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
       );
     }
 
-    // Handle PDF files
+    // Handle PDF files - NOW USING THE PDF VIEWER SCREEN
     if (_isPdfFile(_item!.name)) {
-      return _buildPdfViewer();
+      return PdfViewerScreen(filePath: _file!.path, fileName: _item!.name);
     }
 
     // Handle Audio files
@@ -386,48 +387,8 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
     return _buildFallbackViewer();
   }
 
-  Widget _buildPdfViewer() {
-    return Container(
-      color: Colors.white,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.picture_as_pdf, size: 80, color: Colors.red[400]),
-            const SizedBox(height: 24),
-            const Text(
-              'PDF Document',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _item!.name,
-              style: const TextStyle(fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: _openWithExternalApp,
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Open PDF with External App'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () => Get.back(),
-              icon: const Icon(Icons.close),
-              label: const Text('Close'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // REMOVE the old _buildPdfViewer method since we're now using PdfViewerScreen
+  // But keep it if you want to use it as fallback
 
   Widget _buildAudioPlayer() {
     return Container(
