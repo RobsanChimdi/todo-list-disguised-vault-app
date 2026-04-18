@@ -6,7 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/services/local_storage_service.dart';
 import '../../../../core/services/biometric_service.dart'; // You'll need to create this
 import '../../../../core/services/email_service.dart'; // You'll need to create this
-import '../../../../core/services/user_repository.dart'; // You'll need to create this
+import '../../../../core/services/user_repository.dart';
 
 class AuthController extends GetxController {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();

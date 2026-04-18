@@ -10,6 +10,7 @@ class BiometricService {
       final isDeviceSupported = await _localAuth.isDeviceSupported();
       return isAvailable && isDeviceSupported;
     } catch (e) {
+      print('Biometric availability check error: $e');
       return false;
     }
   }

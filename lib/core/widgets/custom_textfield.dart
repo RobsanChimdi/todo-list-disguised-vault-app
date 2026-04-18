@@ -34,6 +34,7 @@ class CustomTextField extends StatelessWidget {
     this.enabled = true,
     this.maxLines = 1,
     this.autofocus = false,
+    required String hintText,
   }) : super(key: key);
 
   @override

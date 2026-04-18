@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:my_first_app/core/services/user_repository.dart';
 import 'features/auth/presentation/controllers/auth_controller.dart';
 import 'features/disguise/controllers/disguise_controller.dart';
 import 'features/notebook/presentation/controllers/note_controller.dart';
@@ -84,6 +85,7 @@ class _AppRootState extends State<AppRoot> {
       Get.put<DisguiseController>(DisguiseController());
       Get.put<NoteController>(NoteController(noteRepository));
       Get.put<VaultController>(VaultController(vaultRepository));
+      Get.put(UserRepository());
 
       // Load initial data
       await Get.find<NoteController>().loadNotes();
