@@ -23,11 +23,17 @@ class _SetPinScreenState extends State<SetPinScreen> {
   final TextEditingController _pinController = TextEditingController();
   final TextEditingController _confirmPinController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _verificationCodeController =
+      TextEditingController();
 
   final RxBool _isPinVisible = false.obs;
   final RxBool _isConfirmPinVisible = false.obs;
   final RxString _pinError = ''.obs;
   final RxString _emailError = ''.obs;
+  final RxString _verificationError = ''.obs;
+  final RxBool _isEmailVerified = false.obs;
+  final RxString _verificationCode = ''.obs;
+  final RxInt _resendCooldown = 0.obs;
 
   final RxInt _currentStep = 0.obs;
 
@@ -43,6 +49,7 @@ class _SetPinScreenState extends State<SetPinScreen> {
     _pinController.dispose();
     _confirmPinController.dispose();
     _emailController.dispose();
+    _verificationCodeController.dispose();
     super.dispose();
   }
 
@@ -151,7 +158,7 @@ class _SetPinScreenState extends State<SetPinScreen> {
                     ],
 
                     // Step 2: Enter Email for recovery
-                    if (_currentStep.value == 1) ...[
+                    if (_currentStep.value == 1 && !_isEmailVerified.value) ...[
                       Text('Recovery Email', style: AppStyles.heading1),
                       const SizedBox(height: 12),
                       Text(
@@ -166,16 +173,44 @@ class _SetPinScreenState extends State<SetPinScreen> {
                       // Email Input
                       Text('Email Address', style: AppStyles.labelText),
                       const SizedBox(height: 8),
-                      CustomTextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        prefixIcon: Icons.email,
-                        hintText: 'your@email.com',
-                        onChanged: (value) {
-                          if (_emailError.value.isNotEmpty) {
-                            _emailError.value = '';
-                          }
-                        },
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: CustomTextField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              prefixIcon: Icons.email,
+                              hintText: 'your@email.com',
+                              onChanged: (value) {
+                                if (_emailError.value.isNotEmpty) {
+                                  _emailError.value = '';
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            onPressed: _authController.isLoading.value
+                                ? null
+                                : _sendVerificationCode,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(100, 56),
+                            ),
+                            child: _authController.isLoading.value
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Send Code'),
+                          ),
+                        ],
                       ),
 
                       if (_emailError.value.isNotEmpty)
@@ -186,6 +221,77 @@ class _SetPinScreenState extends State<SetPinScreen> {
                             style: AppStyles.errorText,
                           ),
                         ),
+
+                      const SizedBox(height: 24),
+
+                      // Verification Code Input
+                      if (_verificationCode.value.isNotEmpty) ...[
+                        Text('Verification Code', style: AppStyles.labelText),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: CustomTextField(
+                                controller: _verificationCodeController,
+                                keyboardType: TextInputType.number,
+                                maxLength: 6,
+                                prefixIcon: Icons.verified_user,
+                                hintText: 'Enter 6-digit code',
+                                onChanged: (value) {
+                                  if (_verificationError.value.isNotEmpty) {
+                                    _verificationError.value = '';
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            ElevatedButton(
+                              onPressed:
+                                  _resendCooldown.value > 0 ||
+                                      _authController.isLoading.value
+                                  ? null
+                                  : _sendVerificationCode,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.grey[300],
+                                foregroundColor: AppColors.primary,
+                                minimumSize: const Size(100, 56),
+                              ),
+                              child: _resendCooldown.value > 0
+                                  ? Text('${_resendCooldown.value}s')
+                                  : const Text('Resend'),
+                            ),
+                          ],
+                        ),
+                        if (_verificationError.value.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              _verificationError.value,
+                              style: AppStyles.errorText,
+                            ),
+                          ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _authController.isLoading.value
+                              ? null
+                              : _verifyEmail,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 50),
+                          ),
+                          child: _authController.isLoading.value
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Verify Email'),
+                        ),
+                      ],
 
                       const SizedBox(height: 24),
 
@@ -213,6 +319,45 @@ class _SetPinScreenState extends State<SetPinScreen> {
                           ],
                         ),
                       ),
+                    ],
+
+                    // Success message after verification
+                    if (_isEmailVerified.value) ...[
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.check_circle,
+                              color: Colors.green.shade700,
+                              size: 60,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Email Verified!',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _emailController.text.trim(),
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                     ],
 
                     const SizedBox(height: 32),
@@ -266,33 +411,22 @@ class _SetPinScreenState extends State<SetPinScreen> {
                             () => CustomButton(
                               text: _currentStep.value == 0
                                   ? 'Next'
-                                  : 'Complete Setup',
+                                  : (_isEmailVerified.value
+                                        ? 'Complete Setup'
+                                        : 'Skip for now'),
                               onPressed: _authController.isLoading.value
                                   ? null
                                   : _currentStep.value == 0
                                   ? _validateAndNext
-                                  : _completeSetup,
+                                  : (_isEmailVerified.value
+                                        ? _completeSetup
+                                        : _skipEmailSetup),
                               isLoading: _authController.isLoading.value,
                             ),
                           ),
                         ),
                       ],
                     ),
-
-                    // Skip option for email (only in step 2)
-                    if (_currentStep.value == 1)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Center(
-                          child: TextButton(
-                            onPressed: _skipEmailSetup,
-                            child: Text(
-                              'Skip for now',
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -367,39 +501,46 @@ class _SetPinScreenState extends State<SetPinScreen> {
     );
   }
 
-  void _validateAndNext() async {
-    final pin = _pinController.text.trim();
-    final confirmPin = _confirmPinController.text.trim();
+  bool _isValidEmail(String email) {
+    // Comprehensive email regex
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
 
-    // Validate PIN
-    if (pin.isEmpty) {
-      _pinError.value = 'Please enter a PIN';
-      return;
-    }
+    // Additional validation rules
+    if (!emailRegex.hasMatch(email)) return false;
 
-    if (pin.length < 4) {
-      _pinError.value = 'PIN must be at least 4 digits';
-      return;
-    }
+    // Check for consecutive dots
+    if (email.contains('..')) return false;
 
-    if (pin.length > 6) {
-      _pinError.value = 'PIN must be at most 6 digits';
-      return;
-    }
+    // Check length limits
+    if (email.length > 254) return false;
 
-    if (pin != confirmPin) {
-      _pinError.value = 'PINs do not match';
-      return;
-    }
+    // Split local part and domain
+    final parts = email.split('@');
+    if (parts.length != 2) return false;
 
-    // Check if PIN is too simple
-    if (_isWeakPin(pin)) {
-      _showWeakPinDialog();
-      return;
-    }
+    final localPart = parts[0];
+    final domain = parts[1];
 
-    // Proceed to email step
-    _currentStep.value = 1;
+    // Local part validation
+    if (localPart.isEmpty || localPart.length > 64) return false;
+
+    // Domain validation
+    if (domain.isEmpty || domain.length > 255) return false;
+
+    // Check for valid domain characters
+    final domainRegex = RegExp(r'^[a-zA-Z0-9.-]+$');
+    if (!domainRegex.hasMatch(domain)) return false;
+
+    // Check domain has at least one dot and valid TLD
+    final domainParts = domain.split('.');
+    if (domainParts.length < 2) return false;
+
+    final tld = domainParts.last;
+    if (tld.length < 2 || tld.length > 63) return false;
+
+    return true;
   }
 
   bool _isWeakPin(String pin) {
@@ -435,9 +576,34 @@ class _SetPinScreenState extends State<SetPinScreen> {
       '234567',
       '345678',
       '456789',
+      '12345678',
+      '012345',
+      '987654',
+      '112233',
+      '121212',
+      '123123',
+      '101010',
     ];
 
-    return weakPins.contains(pin);
+    // Check for sequential patterns
+    bool isSequential = true;
+    for (int i = 1; i < pin.length; i++) {
+      if (int.parse(pin[i]) != (int.parse(pin[i - 1]) + 1) % 10) {
+        isSequential = false;
+        break;
+      }
+    }
+
+    // Check for reverse sequential patterns
+    bool isReverseSequential = true;
+    for (int i = 1; i < pin.length; i++) {
+      if (int.parse(pin[i]) != (int.parse(pin[i - 1]) - 1 + 10) % 10) {
+        isReverseSequential = false;
+        break;
+      }
+    }
+
+    return weakPins.contains(pin) || isSequential || isReverseSequential;
   }
 
   void _showWeakPinDialog() {
@@ -465,44 +631,176 @@ class _SetPinScreenState extends State<SetPinScreen> {
     );
   }
 
+  void _validateAndNext() async {
+    final pin = _pinController.text.trim();
+    final confirmPin = _confirmPinController.text.trim();
+
+    // Validate PIN
+    if (pin.isEmpty) {
+      _pinError.value = 'Please enter a PIN';
+      return;
+    }
+
+    if (pin.length < 4) {
+      _pinError.value = 'PIN must be at least 4 digits';
+      return;
+    }
+
+    if (pin.length > 6) {
+      _pinError.value = 'PIN must be at most 6 digits';
+      return;
+    }
+
+    if (pin != confirmPin) {
+      _pinError.value = 'PINs do not match';
+      return;
+    }
+
+    // Check if PIN is too simple
+    if (_isWeakPin(pin)) {
+      _showWeakPinDialog();
+      return;
+    }
+
+    // Proceed to email step
+    _currentStep.value = 1;
+  }
+
+  Future<void> _sendVerificationCode() async {
+    final email = _emailController.text.trim();
+
+    // Validate email format
+    if (email.isEmpty) {
+      _emailError.value = 'Please enter your email address';
+      return;
+    }
+
+    if (!_isValidEmail(email)) {
+      _emailError.value =
+          'Please enter a valid email address (e.g., name@domain.com)';
+      return;
+    }
+
+    // Clear previous verification
+    _verificationError.value = '';
+    _verificationCodeController.clear();
+
+    // Send verification code
+    final success = await _authController.sendEmailVerificationCode(email);
+
+    if (success) {
+      _verificationCode.value = 'sent';
+      _startResendCooldown();
+      Get.snackbar(
+        'Verification Code Sent',
+        'Please check your email for the 6-digit verification code',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+    } else {
+      _emailError.value = 'Failed to send verification code. Please try again.';
+    }
+  }
+
+  void _startResendCooldown() {
+    _resendCooldown.value = 60; // 60 seconds cooldown
+    Future.delayed(const Duration(seconds: 1), () {
+      if (_resendCooldown.value > 0) {
+        _resendCooldown.value--;
+        _startResendCooldown();
+      }
+    });
+  }
+
+  Future<void> _verifyEmail() async {
+    final code = _verificationCodeController.text.trim();
+    final email = _emailController.text.trim();
+
+    if (code.isEmpty) {
+      _verificationError.value = 'Please enter the verification code';
+      return;
+    }
+
+    if (code.length != 6) {
+      _verificationError.value = 'Please enter a valid 6-digit code';
+      return;
+    }
+
+    // Verify the code
+    final isValid = await _authController.verifyEmailCode(email, code);
+
+    if (isValid) {
+      _isEmailVerified.value = true;
+      // Save email to repository
+      await _userRepository.saveUserEmail(email);
+      Get.snackbar(
+        'Success',
+        'Email verified successfully!',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } else {
+      _verificationError.value = 'Invalid verification code. Please try again.';
+    }
+  }
+
   void _goToPreviousStep() {
     _currentStep.value = 0;
   }
 
   void _skipEmailSetup() async {
-    await _completeSetup(skipEmail: true);
+    // Show confirmation dialog
+    final shouldSkip = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Skip Email Setup?'),
+        content: const Text(
+          'Without a recovery email, you won\'t be able to reset your PIN if you forget it. '
+          'Are you sure you want to skip this step?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Skip'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldSkip == true) {
+      await _completeSetup(skipEmail: true);
+    }
   }
 
   Future<void> _completeSetup({bool skipEmail = false}) async {
     final pin = _pinController.text.trim();
 
-    if (!skipEmail) {
-      final email = _emailController.text.trim();
-
-      // Validate email
-      if (email.isEmpty) {
-        _emailError.value = 'Please enter your email address';
-        return;
-      }
-
-      if (!_isValidEmail(email)) {
-        _emailError.value = 'Please enter a valid email address';
-        return;
-      }
-
-      // Save email first
-      await _userRepository.saveUserEmail(email);
-    }
-
     // Set the PIN
     final success = await _authController.setPin(pin);
 
     if (success) {
-      if (!skipEmail) {
-        // Show success message about recovery
+      if (!skipEmail && _isEmailVerified.value) {
+        // Email is already saved in verification step
         Get.snackbar(
           'Setup Complete',
           'Your PIN has been set. You can use your email to recover your PIN if needed.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      } else if (skipEmail) {
+        Get.snackbar(
+          'Setup Complete',
+          'Your PIN has been set. Remember to keep it safe as you won\'t have email recovery.',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.green,
           colorText: Colors.white,
@@ -520,12 +818,5 @@ class _SetPinScreenState extends State<SetPinScreen> {
         colorText: Colors.white,
       );
     }
-  }
-
-  bool _isValidEmail(String email) {
-    final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    );
-    return emailRegex.hasMatch(email);
   }
 }
