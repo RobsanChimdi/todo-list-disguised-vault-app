@@ -2,9 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'dart:io' show Platform;
 import '../controllers/auth_controller.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
+import '../../../../core/widgets/custom_textfield.dart';
 
 class LockScreen extends StatefulWidget {
   const LockScreen({Key? key}) : super(key: key);
@@ -17,11 +19,49 @@ class _LockScreenState extends State<LockScreen> {
   late final AuthController _authController;
   final RxString _enteredPin = ''.obs;
   final RxString _errorMessage = ''.obs;
+  final RxBool _isBiometricAvailable = false.obs;
+  final RxInt _lockoutTimeRemaining = 0.obs;
 
   @override
   void initState() {
     super.initState();
     _authController = Get.find<AuthController>();
+    _checkBiometricAvailability();
+    _startLockoutTimer();
+  }
+
+  Future<void> _checkBiometricAvailability() async {
+    // Check if biometrics is available and enabled
+    _isBiometricAvailable.value = _authController.isBiometricsEnabled.value;
+  }
+
+  void _startLockoutTimer() {
+    if (_authController.isLocked.value &&
+        _authController.lockoutUntil.value != null) {
+      _updateLockoutTimer();
+      Future.doWhile(() async {
+        await Future.delayed(const Duration(seconds: 1));
+        _updateLockoutTimer();
+        return _lockoutTimeRemaining.value > 0;
+      });
+    }
+  }
+
+  void _updateLockoutTimer() {
+    if (_authController.lockoutUntil.value != null) {
+      final remaining = _authController.lockoutUntil.value!.difference(
+        DateTime.now(),
+      );
+      if (remaining.inSeconds > 0) {
+        _lockoutTimeRemaining.value = remaining.inSeconds;
+      } else {
+        _lockoutTimeRemaining.value = 0;
+        _authController.isLocked.value = false;
+        _authController.failedAttempts.value = 0;
+        _authController.lockoutUntil.value = null;
+        _errorMessage.value = '';
+      }
+    }
   }
 
   @override
@@ -55,22 +95,41 @@ class _LockScreenState extends State<LockScreen> {
 
                       // Title
                       Text(
-                        'Enter PIN',
+                        _authController.isLocked.value
+                            ? 'Account Locked'
+                            : 'Enter PIN',
                         style: AppStyles.heading1.copyWith(fontSize: 28),
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Enter your PIN to access the secure vault',
+                        _authController.isLocked.value
+                            ? 'Too many failed attempts'
+                            : 'Enter your PIN to access the secure vault',
                         style: AppStyles.bodyText.copyWith(
                           color: Colors.grey[600],
                         ),
                         textAlign: TextAlign.center,
                       ),
+
+                      if (_lockoutTimeRemaining.value > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            'Try again in ${(_lockoutTimeRemaining.value ~/ 60)}m ${(_lockoutTimeRemaining.value % 60)}s',
+                            style: TextStyle(
+                              color: Colors.red.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+
                       const SizedBox(height: 48),
 
-                      // PIN display (dots)
-                      _buildPinDisplay(),
-                      const SizedBox(height: 32),
+                      // PIN display
+                      if (!_authController.isLocked.value) ...[
+                        _buildPinDisplay(),
+                        const SizedBox(height: 32),
+                      ],
 
                       // Error message
                       if (_errorMessage.value.isNotEmpty)
@@ -91,19 +150,40 @@ class _LockScreenState extends State<LockScreen> {
                         ),
                       const SizedBox(height: 32),
 
-                      // PIN Pad
-                      _buildPinPad(),
+                      // PIN Pad (only if not locked)
+                      if (!_authController.isLocked.value) ...[
+                        _buildPinPad(),
+                        const SizedBox(height: 24),
+                      ],
 
-                      const SizedBox(height: 24),
+                      // Biometric button (if available)
+                      if (_isBiometricAvailable.value &&
+                          !_authController.isLocked.value)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: ElevatedButton.icon(
+                            onPressed: _authenticateWithBiometrics,
+                            icon: Icon(
+                              Platform.isIOS ? Icons.face : Icons.fingerprint,
+                            ),
+                            label: const Text('Use Biometric Authentication'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.grey.shade200,
+                              foregroundColor: AppColors.primary,
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
 
                       // Forgot PIN button
-                      TextButton(
-                        onPressed: _showForgotPinDialog,
-                        child: const Text(
-                          'Forgot PIN?',
-                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                      if (!_authController.isLocked.value)
+                        TextButton(
+                          onPressed: _showForgotPinDialog,
+                          child: const Text(
+                            'Forgot PIN?',
+                            style: TextStyle(fontSize: 14, color: Colors.grey),
+                          ),
                         ),
-                      ),
 
                       const SizedBox(height: 8),
 
@@ -202,21 +282,25 @@ class _LockScreenState extends State<LockScreen> {
     bool isClear = false,
   }) {
     return GestureDetector(
-      onTap: () {
-        if (isDelete) {
-          _deleteDigit();
-        } else if (isClear) {
-          _clearPin();
-        } else {
-          _addDigit(digit);
-        }
-      },
+      onTap: _authController.isLocked.value
+          ? null
+          : () {
+              if (isDelete) {
+                _deleteDigit();
+              } else if (isClear) {
+                _clearPin();
+              } else {
+                _addDigit(digit);
+              }
+            },
       child: Container(
         width: 70,
         height: 70,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Colors.grey.shade100,
+          color: _authController.isLocked.value
+              ? Colors.grey.shade200
+              : Colors.grey.shade100,
           boxShadow: [
             BoxShadow(
               color: Colors.grey.shade300,
@@ -277,19 +361,37 @@ class _LockScreenState extends State<LockScreen> {
     } else {
       // Failed
       _enteredPin.value = '';
-      _errorMessage.value = 'Invalid PIN';
 
-      // Check if locked
       if (_authController.isLocked.value) {
         _errorMessage.value = 'Too many attempts. Locked for 5 minutes.';
+        _startLockoutTimer();
+      } else {
+        final remainingAttempts = 5 - _authController.failedAttempts.value;
+        _errorMessage.value =
+            'Invalid PIN. $remainingAttempts attempt${remainingAttempts != 1 ? 's' : ''} remaining.';
       }
 
       // Auto clear error after 3 seconds
       Future.delayed(const Duration(seconds: 3), () {
-        if (_errorMessage.value.isNotEmpty) {
+        if (_errorMessage.value.isNotEmpty && !_authController.isLocked.value) {
           _errorMessage.value = '';
         }
       });
+    }
+  }
+
+  Future<void> _authenticateWithBiometrics() async {
+    final success = await _authController.authenticateWithBiometrics();
+    if (success) {
+      Get.offAllNamed('/vault');
+    } else {
+      Get.snackbar(
+        'Authentication Failed',
+        'Please use your PIN to unlock',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     }
   }
 
@@ -308,25 +410,23 @@ class _LockScreenState extends State<LockScreen> {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 16),
-              _buildOptionCard(
-                icon: Icons.fingerprint,
-                title: 'Use Biometric Authentication',
-                description:
-                    'If you have biometrics enabled, you can unlock using fingerprint/face ID',
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _authController.authenticateWithBiometrics();
-                  if (_authController.isAuthenticated.value) {
-                    Get.offAllNamed('/vault');
-                  }
-                },
-              ),
+              if (_authController.isBiometricsEnabled.value)
+                _buildOptionCard(
+                  icon: Platform.isIOS ? Icons.face : Icons.fingerprint,
+                  title: 'Use Biometric Authentication',
+                  description:
+                      'If you have biometrics enabled, you can unlock using fingerprint/face ID',
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _authenticateWithBiometrics();
+                  },
+                ),
               const SizedBox(height: 12),
               _buildOptionCard(
                 icon: Icons.email,
                 title: 'Reset via Email',
                 description:
-                    'We\'ll send a reset link to your registered email',
+                    'We\'ll send a verification code to your registered email',
                 onTap: () {
                   Navigator.pop(context);
                   _showResetPinDialog();
@@ -336,7 +436,7 @@ class _LockScreenState extends State<LockScreen> {
               _buildOptionCard(
                 icon: Icons.logout,
                 title: 'Logout and Re-login',
-                description: 'You\'ll need to enter your master password again',
+                description: 'You\'ll need to set up your PIN again',
                 onTap: () {
                   Navigator.pop(context);
                   _showLogoutConfirmation();
@@ -408,78 +508,294 @@ class _LockScreenState extends State<LockScreen> {
 
   void _showResetPinDialog() {
     final emailController = TextEditingController();
+    final codeController = TextEditingController();
+    final pinController = TextEditingController();
+    final confirmPinController = TextEditingController();
+
+    RxInt currentStep = 0.obs;
+    RxString verificationCode = ''.obs;
+    RxString resetToken = ''.obs;
+    RxBool isCodeSent = false.obs;
+    RxBool isCodeVerified = false.obs;
+    RxInt resendCooldown = 0.obs;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Reset PIN'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Enter your email address to receive a PIN reset link.',
-                style: TextStyle(fontSize: 14),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(
+                currentStep.value == 0
+                    ? 'Reset PIN'
+                    : currentStep.value == 1
+                    ? 'Enter Verification Code'
+                    : 'Set New PIN',
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: emailController,
-                decoration: const InputDecoration(
-                  hintText: 'Enter your email',
-                  border: OutlineInputBorder(),
+              content: Container(
+                width: MediaQuery.of(context).size.width * 0.8,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (currentStep.value == 0) ...[
+                      const Text(
+                        'Enter your email address to receive a verification code.',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+                      CustomTextField(
+                        controller: emailController,
+                        hintText: 'Enter your email',
+                        keyboardType: TextInputType.emailAddress,
+                        prefixIcon: Icons.email,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed:
+                            _authController.isLoading.value ||
+                                resendCooldown.value > 0
+                            ? null
+                            : () async {
+                                final email = emailController.text.trim();
+                                if (email.isEmpty) {
+                                  Get.snackbar(
+                                    'Error',
+                                    'Please enter your email',
+                                    backgroundColor: Colors.red,
+                                    colorText: Colors.white,
+                                  );
+                                  return;
+                                }
+
+                                // Send reset code
+                                final success = await _authController
+                                    .sendPinResetCode(email);
+
+                                if (success) {
+                                  isCodeSent.value = true;
+                                  currentStep.value = 1;
+
+                                  // Start cooldown
+                                  resendCooldown.value = 60;
+                                  _startResendCooldown(
+                                    resendCooldown,
+                                    setState,
+                                  );
+
+                                  Get.snackbar(
+                                    'Code Sent',
+                                    'Verification code sent to your email',
+                                    backgroundColor: Colors.green,
+                                    colorText: Colors.white,
+                                  );
+                                } else {
+                                  Get.snackbar(
+                                    'Error',
+                                    'Failed to send verification code',
+                                    backgroundColor: Colors.red,
+                                    colorText: Colors.white,
+                                  );
+                                }
+                              },
+                        child: _authController.isLoading.value
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                resendCooldown.value > 0
+                                    ? 'Resend in ${resendCooldown.value}s'
+                                    : 'Send Code',
+                              ),
+                      ),
+                    ],
+
+                    if (currentStep.value == 1) ...[
+                      const Text(
+                        'Enter the 6-digit verification code sent to your email.',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+                      CustomTextField(
+                        controller: codeController,
+                        hintText: 'Enter 6-digit code',
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        prefixIcon: Icons.verified_user,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _authController.isLoading.value
+                                  ? null
+                                  : () async {
+                                      final code = codeController.text.trim();
+                                      final email = emailController.text.trim();
+
+                                      if (code.length != 6) {
+                                        Get.snackbar(
+                                          'Error',
+                                          'Please enter a valid 6-digit code',
+                                          backgroundColor: Colors.red,
+                                          colorText: Colors.white,
+                                        );
+                                        return;
+                                      }
+
+                                      // This would need a new method in AuthController
+                                      // to verify reset code without setting PIN yet
+                                      // For now, we'll proceed to next step
+                                      isCodeVerified.value = true;
+                                      currentStep.value = 2;
+                                    },
+                              child: const Text('Verify Code'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextButton(
+                              onPressed: resendCooldown.value > 0
+                                  ? null
+                                  : () async {
+                                      final email = emailController.text.trim();
+                                      await _authController.sendPinResetCode(
+                                        email,
+                                      );
+                                      resendCooldown.value = 60;
+                                      _startResendCooldown(
+                                        resendCooldown,
+                                        setState,
+                                      );
+                                    },
+                              child: Text(
+                                resendCooldown.value > 0
+                                    ? 'Resend (${resendCooldown.value}s)'
+                                    : 'Resend Code',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    if (currentStep.value == 2) ...[
+                      const Text(
+                        'Enter your new PIN',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+                      CustomTextField(
+                        controller: pinController,
+                        hintText: 'Enter new PIN',
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        obscureText: true,
+                        prefixIcon: Icons.lock,
+                      ),
+                      const SizedBox(height: 12),
+                      CustomTextField(
+                        controller: confirmPinController,
+                        hintText: 'Confirm new PIN',
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        obscureText: true,
+                        prefixIcon: Icons.lock_outline,
+                      ),
+                    ],
+                  ],
                 ),
-                keyboardType: TextInputType.emailAddress,
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (emailController.text.isEmpty) {
-                  return;
-                }
-                Navigator.pop(context);
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    if (currentStep.value > 0) {
+                      currentStep.value--;
+                    } else {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: Text(currentStep.value == 0 ? 'Cancel' : 'Back'),
+                ),
+                if (currentStep.value == 2)
+                  ElevatedButton(
+                    onPressed: _authController.isLoading.value
+                        ? null
+                        : () async {
+                            final newPin = pinController.text.trim();
+                            final confirmPin = confirmPinController.text.trim();
 
-                // Show loading
-                Get.dialog(
-                  const Center(child: CircularProgressIndicator()),
-                  barrierDismissible: false,
-                );
+                            if (newPin.isEmpty || newPin.length < 4) {
+                              Get.snackbar(
+                                'Error',
+                                'PIN must be at least 4 digits',
+                                backgroundColor: Colors.red,
+                                colorText: Colors.white,
+                              );
+                              return;
+                            }
 
-                final success = await _authController.sendPinResetEmail(
-                  emailController.text,
-                );
+                            if (newPin != confirmPin) {
+                              Get.snackbar(
+                                'Error',
+                                'PINs do not match',
+                                backgroundColor: Colors.red,
+                                colorText: Colors.white,
+                              );
+                              return;
+                            }
 
-                Get.back(); // Close loading
+                            // Reset PIN
+                            final success = await _authController
+                                .verifyResetCodeAndSetPin(
+                                  emailController.text.trim(),
+                                  codeController.text.trim(),
+                                  newPin,
+                                );
 
-                if (success) {
-                  Get.snackbar(
-                    'Success',
-                    'PIN reset link sent to your email',
-                    snackPosition: SnackPosition.BOTTOM,
-                    backgroundColor: Colors.green,
-                    colorText: Colors.white,
-                  );
-                } else {
-                  Get.snackbar(
-                    'Error',
-                    'Failed to send reset link. Email not found.',
-                    snackPosition: SnackPosition.BOTTOM,
-                    backgroundColor: Colors.red,
-                    colorText: Colors.white,
-                  );
-                }
-              },
-              child: const Text('Send Reset Link'),
-            ),
-          ],
+                            Navigator.pop(context);
+
+                            if (success) {
+                              Get.snackbar(
+                                'Success',
+                                'PIN has been reset successfully',
+                                backgroundColor: Colors.green,
+                                colorText: Colors.white,
+                              );
+                            } else {
+                              Get.snackbar(
+                                'Error',
+                                'Failed to reset PIN. Please try again.',
+                                backgroundColor: Colors.red,
+                                colorText: Colors.white,
+                              );
+                            }
+                          },
+                    child: const Text('Reset PIN'),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
+  }
+
+  void _startResendCooldown(RxInt cooldown, StateSetter setState) {
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+      if (cooldown.value > 0) {
+        cooldown.value--;
+        setState(() {});
+        return true;
+      }
+      return false;
+    });
   }
 
   void _showLogoutConfirmation() {
@@ -489,7 +805,7 @@ class _LockScreenState extends State<LockScreen> {
         return AlertDialog(
           title: const Text('Logout'),
           content: const Text(
-            'Are you sure you want to logout? You\'ll need to enter your master password to access the vault again.',
+            'Are you sure you want to logout? You\'ll need to set up your PIN again to access the vault.',
           ),
           actions: [
             TextButton(
@@ -500,7 +816,7 @@ class _LockScreenState extends State<LockScreen> {
               onPressed: () async {
                 Navigator.pop(context);
                 await _authController.logout();
-                Get.offAllNamed('/login');
+                Get.offAllNamed('/set-pin');
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: const Text('Logout'),
