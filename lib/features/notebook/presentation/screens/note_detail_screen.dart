@@ -5,8 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../data/models/note_model.dart';
 import '../controllers/note_controller.dart';
 import 'add_edit_note_screen.dart';
@@ -32,6 +37,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
   final ScrollController _scrollController = ScrollController();
   bool _showFAB = true;
   double _lastScrollPosition = 0;
+  bool _isPrinting = false;
 
   @override
   void initState() {
@@ -54,6 +60,21 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
     _animationController.forward();
 
     _scrollController.addListener(_onScroll);
+
+    _requestStoragePermission();
+  }
+
+  Future<void> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      // For Android 13+ we need different permissions
+      if (await Permission.storage.isDenied) {
+        await Permission.storage.request();
+      }
+      // For Android 11+ we also need manage external storage
+      if (await Permission.manageExternalStorage.isDenied) {
+        await Permission.manageExternalStorage.request();
+      }
+    }
   }
 
   void _onScroll() {
@@ -105,38 +126,12 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
               Color(_currentNote.backgroundColor).withOpacity(0.95),
               Color(_currentNote.backgroundColor).withOpacity(0),
             ],
-            stops: [0.0, 1.0],
+            stops: const [0.0, 1.0],
           ),
         ),
       ),
-      title: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.calendar_today, size: 14, color: Colors.grey[700]),
-            SizedBox(width: 6),
-            Text(
-              _formatDate(_currentNote.createdAt),
-              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-            ),
-            if (_currentNote.updatedAt != _currentNote.createdAt) ...[
-              SizedBox(width: 12),
-              Icon(Icons.edit_calendar, size: 14, color: Colors.grey[600]),
-              SizedBox(width: 6),
-              Text(
-                _formatDate(_currentNote.updatedAt),
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-              ),
-            ],
-          ],
-        ),
-      ),
+      title: const Text(''),
+      centerTitle: false,
       actions: [
         _buildActionButton(
           icon: Icons.share,
@@ -145,7 +140,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
         ),
         _buildActionButton(
           icon: Icons.print,
-          onPressed: _printNote,
+          onPressed: _isPrinting ? null : _printNote,
           color: Colors.purple,
         ),
         _buildActionButton(
@@ -160,7 +155,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
           onPressed: _isUpdating ? null : _toggleArchive,
           color: Colors.grey,
         ),
-        SizedBox(width: 8),
+        const SizedBox(width: 8),
       ],
     );
   }
@@ -171,19 +166,21 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
     required Color color,
   }) {
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
       ),
       child: IconButton(
         icon: AnimatedSwitcher(
-          duration: Duration(milliseconds: 200),
-          child: Icon(icon, key: ValueKey(icon), color: color),
+          duration: const Duration(milliseconds: 200),
+          child: Icon(icon, key: ValueKey(icon), color: color, size: 20),
         ),
         onPressed: onPressed,
         tooltip: _getTooltip(icon),
+        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
       ),
     );
   }
@@ -213,7 +210,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -233,6 +230,8 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                _buildDateInfo(),
                 const SizedBox(height: 16),
                 _buildMetadataSection(),
                 const SizedBox(height: 24),
@@ -250,39 +249,76 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
     );
   }
 
-  Widget _buildMetadataSection() {
+  Widget _buildDateInfo() {
+    final hasBothDates = _currentNote.lastEdited != _currentNote.createdAt;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _buildInfoChip(
+          icon: Icons.calendar_today,
+          label: 'Created: ${_formatShortDate(_currentNote.createdAt)}',
+          color: Colors.grey[700]!,
+        ),
+        if (hasBothDates)
+          _buildInfoChip(
+            icon: Icons.edit_calendar,
+            label: 'Edited: ${_formatShortDate(_currentNote.lastEdited)}',
+            color: Colors.grey[600]!,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildInfoChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.black.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildMetadataChip(icon: Icons.text_fields, label: _getWordCount()),
-          SizedBox(width: 12),
-          _buildMetadataChip(icon: Icons.abc, label: _getCharCount()),
-          if (_currentNote.content.isNotEmpty) ...[
-            SizedBox(width: 12),
-            _buildMetadataChip(icon: Icons.timer, label: _getReadTime()),
-          ],
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontSize: 11, color: color)),
         ],
       ),
     );
   }
 
+  Widget _buildMetadataSection() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _buildMetadataChip(icon: Icons.text_fields, label: _getWordCount()),
+        _buildMetadataChip(icon: Icons.abc, label: _getCharCount()),
+        if (_currentNote.content.isNotEmpty)
+          _buildMetadataChip(icon: Icons.timer, label: _getReadTime()),
+      ],
+    );
+  }
+
   Widget _buildMetadataChip({required IconData icon, required String label}) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.withOpacity(0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 14, color: Colors.grey[700]),
-          SizedBox(width: 4),
+          const SizedBox(width: 6),
           Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
         ],
       ),
@@ -308,7 +344,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
     final content = _currentNote.content;
     if (content.trim().isEmpty) {
       return Container(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(40),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -321,29 +357,15 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
         ),
-        child: Center(
+        child: const Center(
           child: Column(
             children: [
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: Icon(Icons.edit_note, size: 48, color: Colors.grey[400]),
-              ),
+              Icon(Icons.edit_note, size: 64, color: Colors.grey),
               SizedBox(height: 16),
               Text(
                 'No content yet',
                 style: TextStyle(
-                  color: Colors.grey[600],
+                  color: Colors.grey,
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
                 ),
@@ -351,7 +373,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
               SizedBox(height: 8),
               Text(
                 'Tap edit to add content',
-                style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                style: TextStyle(color: Colors.grey, fontSize: 14),
               ),
             ],
           ),
@@ -360,7 +382,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
     }
 
     return Container(
-      padding: EdgeInsets.all(4),
+      padding: const EdgeInsets.all(4),
       child: SelectableText(
         content,
         style: const TextStyle(
@@ -380,7 +402,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
         Row(
           children: [
             Icon(Icons.local_offer, size: 20, color: Colors.grey[600]),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Text(
               'Tags',
               style: TextStyle(
@@ -397,36 +419,24 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
           runSpacing: 10,
           children: _currentNote.tags
               .map(
-                (tag) => Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(25),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Chip(
-                    label: Text(
-                      '#$tag',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 13,
-                      ),
-                    ),
-                    backgroundColor: Colors.blue.withOpacity(0.15),
-                    labelStyle: TextStyle(
-                      color: Colors.blue[700],
+                (tag) => Chip(
+                  label: Text(
+                    '#$tag',
+                    style: const TextStyle(
                       fontWeight: FontWeight.w500,
+                      fontSize: 13,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                      side: BorderSide(color: Colors.blue.withOpacity(0.3)),
-                    ),
-                    elevation: 0,
                   ),
+                  backgroundColor: Colors.blue.withOpacity(0.15),
+                  labelStyle: TextStyle(
+                    color: Colors.blue[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                    side: BorderSide(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  elevation: 0,
                 ),
               )
               .toList(),
@@ -437,15 +447,18 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
 
   Widget _buildFloatingActionButton() {
     return AnimatedOpacity(
-      duration: Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 300),
       opacity: _showFAB ? 1.0 : 0.0,
       child: FloatingActionButton.extended(
         onPressed: _editNote,
-        icon: Icon(Icons.edit_rounded),
-        label: Text('Edit Note', style: TextStyle(fontWeight: FontWeight.w600)),
+        icon: const Icon(Icons.edit_rounded),
+        label: const Text(
+          'Edit Note',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: const Color(0xFF6366F1),
         foregroundColor: Colors.white,
       ),
     );
@@ -487,10 +500,9 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
         _currentNote.isArchived ? 'Note archived' : 'Note unarchived',
       );
 
-      // Optional: Navigate back if archived
       if (_currentNote.isArchived) {
-        Future.delayed(Duration(milliseconds: 500), () {
-          Navigator.pop(context);
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) Navigator.pop(context);
         });
       }
     } catch (e) {
@@ -519,117 +531,264 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
   }
 
   Future<void> _printNote() async {
+    if (_isPrinting) return;
+
     HapticFeedback.mediumImpact();
+    setState(() => _isPrinting = true);
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Preparing PDF...', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+      ),
+    );
+
     try {
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async {
-          final html = _generatePrintHtml();
-          return await Printing.convertHtmlToPdf(html: html, format: format);
-        },
-        name: 'Note - ${_currentNote.title}',
+      // Generate PDF using the pdf package
+      final pdf = pw.Document();
+
+      // Add page
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(40),
+          build: (pw.Context context) => [
+            // Title
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  _currentNote.title,
+                  style: pw.TextStyle(
+                    fontSize: 28,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+
+                // Metadata
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(10),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.grey200,
+                    borderRadius: pw.BorderRadius.circular(5),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'Created: ${_formatDateTime(_currentNote.createdAt)}',
+                        style: pw.TextStyle(fontSize: 10),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Last Updated: ${_formatDateTime(_currentNote.lastEdited)}',
+                        style: pw.TextStyle(fontSize: 10),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Word Count: ${_getWordCount()}',
+                        style: pw.TextStyle(fontSize: 10),
+                      ),
+                      pw.Text(
+                        'Reading Time: ${_getReadTime()}',
+                        style: pw.TextStyle(fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+
+                // Content
+                pw.Text(
+                  _currentNote.content.isEmpty
+                      ? 'No content'
+                      : _currentNote.content,
+                  style: const pw.TextStyle(fontSize: 12, height: 1.5),
+                ),
+
+                // Tags
+                if (_currentNote.tags.isNotEmpty) ...[
+                  pw.SizedBox(height: 30),
+                  pw.Text(
+                    'Tags',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _currentNote.tags
+                        .map(
+                          (tag) => pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: pw.BoxDecoration(
+                              color: PdfColors.blue100,
+                              borderRadius: pw.BorderRadius.circular(20),
+                            ),
+                            child: pw.Text(
+                              '#$tag',
+                              style: pw.TextStyle(
+                                fontSize: 11,
+                                color: PdfColors.blue800,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+
+                // Footer
+                pw.SizedBox(height: 40),
+                pw.Divider(),
+                pw.SizedBox(height: 10),
+                pw.Center(
+                  child: pw.Text(
+                    'Printed from Note App • ${DateFormat('MMM d, yyyy • h:mm a').format(DateTime.now())}',
+                    style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       );
-      _showSnackBar('Print dialog opened');
+
+      // Get PDF bytes
+      final pdfBytes = await pdf.save();
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      // Save PDF with user selected location
+      final fileName =
+          'Note_${_currentNote.title.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+      // Let user choose where to save
+      String? savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save PDF',
+        fileName: fileName,
+        bytes: pdfBytes,
+      );
+
+      if (savedPath != null) {
+        _showSnackBar('PDF saved successfully!');
+
+        // Show options after saving
+        if (mounted) {
+          await _showPrintOptions(File(savedPath), pdfBytes);
+        }
+      } else {
+        _showSnackBar('Save cancelled');
+      }
     } catch (e) {
-      _showSnackBar('Error preparing print: $e');
+      if (mounted) Navigator.pop(context);
+      _showSnackBar('Error preparing PDF: $e');
+    } finally {
+      if (mounted) setState(() => _isPrinting = false);
     }
   }
 
-  String _generatePrintHtml() {
-    return '''
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>${_currentNote.title}</title>
-        <style>
-          body {
-            font-family: 'Helvetica', Arial, sans-serif;
-            margin: 40px;
-            line-height: 1.6;
-            color: #333;
-          }
-          .container {
-            max-width: 800px;
-            margin: 0 auto;
-          }
-          h1 {
-            font-size: 28px;
-            color: #1a1a1a;
-            margin-bottom: 10px;
-            border-bottom: 2px solid #e0e0e0;
-            padding-bottom: 10px;
-          }
-          .metadata {
-            color: #666;
-            font-size: 12px;
-            margin-bottom: 20px;
-            padding: 10px;
-            background-color: #f5f5f5;
-            border-radius: 5px;
-          }
-          .content {
-            font-size: 14px;
-            margin: 20px 0;
-            white-space: pre-wrap;
-          }
-          .tags {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-          }
-          .tag {
-            display: inline-block;
-            background-color: #e3f2fd;
-            color: #1976d2;
-            padding: 4px 12px;
-            margin: 4px;
-            border-radius: 20px;
-            font-size: 12px;
-          }
-          .footer {
-            margin-top: 40px;
-            text-align: center;
-            font-size: 10px;
-            color: #999;
-            border-top: 1px solid #e0e0e0;
-            padding-top: 20px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>${_escapeHtml(_currentNote.title)}</h1>
-          <div class="metadata">
-            <strong>Created:</strong> ${_formatDateTime(_currentNote.createdAt)}<br>
-            <strong>Last Updated:</strong> ${_formatDateTime(_currentNote.updatedAt)}<br>
-            <strong>Word Count:</strong> ${_getWordCount()}<br>
-            <strong>Reading Time:</strong> ${_getReadTime()}
-          </div>
-          <div class="content">
-            ${_escapeHtml(_currentNote.content).replaceAll('\n', '<br>')}
-          </div>
-          ${_currentNote.tags.isNotEmpty ? '''
-          <div class="tags">
-            <strong>Tags:</strong><br>
-            ${_currentNote.tags.map((tag) => '<span class="tag">#$tag</span>').join('')}
-          </div>
-          ''' : ''}
-          <div class="footer">
-            Printed from Note App • ${DateTime.now().toString().split('.')[0]}
-          </div>
-        </div>
-      </body>
-      </html>
-    ''';
+  Future<void> _showPrintOptions(File file, Uint8List pdfData) async {
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Print Options',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.print, size: 28, color: Colors.purple),
+              title: const Text('Print Now'),
+              subtitle: const Text('Send to printer'),
+              onTap: () async {
+                Navigator.pop(context);
+                await Printing.sharePdf(
+                  bytes: pdfData,
+                  filename: file.path.split('/').last,
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share, size: 28, color: Colors.green),
+              title: const Text('Share PDF'),
+              subtitle: const Text('Share via email, WhatsApp, etc.'),
+              onTap: () async {
+                Navigator.pop(context);
+                await Share.shareXFiles([
+                  XFile(file.path),
+                ], subject: 'Note PDF');
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.folder_open,
+                size: 28,
+                color: Colors.blue,
+              ),
+              title: const Text('Open File Location'),
+              subtitle: const Text('View in file manager'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _openFileLocation(file.path);
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
   }
 
-  String _escapeHtml(String text) {
-    return text
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+  Future<void> _openFileLocation(String path) async {
+    try {
+      // Show the file location using platform channels or just inform user
+      _showSnackBar('File saved at: $path');
+
+      // For Android, you can try to open the folder
+      if (Platform.isAndroid) {
+        // You might want to use android_intent_plus package to open file manager
+        _showSnackBar('You can find the file in your Downloads folder');
+      }
+    } catch (e) {
+      _showSnackBar('File saved successfully');
+    }
   }
 
   Future<void> _editNote() async {
@@ -638,7 +797,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
       context,
       MaterialPageRoute(
         builder: (_) => AddEditNoteScreen(note: _currentNote),
-        settings: RouteSettings(name: '/edit-note'),
+        settings: const RouteSettings(name: '/edit-note'),
       ),
     );
     if (result != null && mounted) {
@@ -653,13 +812,13 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
         content: Text(message),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
         action: SnackBarAction(label: 'OK', onPressed: () {}),
       ),
     );
   }
 
-  String _formatDate(DateTime date) {
+  String _formatShortDate(DateTime date) {
     return DateFormat('MMM d, yyyy').format(date);
   }
 

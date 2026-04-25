@@ -1,7 +1,6 @@
 // lib/features/notebook/presentation/screens/notebook_home_screen.dart
 
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -124,14 +123,14 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen>
                       color: Colors.red.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.error_outline,
                       size: 64,
                       color: Colors.red,
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(
+                  const Text(
                     'Error loading notes',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
@@ -148,8 +147,8 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen>
                         _controllerFuture = _initializeController();
                       });
                     },
-                    icon: Icon(Icons.refresh),
-                    label: Text('Retry'),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6366F1),
                       shape: RoundedRectangleBorder(
@@ -259,101 +258,107 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen>
     );
   }
 
-  Widget _buildFilterChips() {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[100]!),
-        ),
-      ),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _filters.length,
-        itemBuilder: (context, index) {
-          final filter = _filters[index];
-          final isSelected = _selectedFilter == filter;
-          return Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: FilterChip(
-              label: Text(filter),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  _selectedFilter = filter;
-                });
-                HapticFeedback.lightImpact();
-              },
-              backgroundColor: Colors.grey[100],
-              selectedColor: const Color(0xFF6366F1).withOpacity(0.1),
-              checkmarkColor: const Color(0xFF6366F1),
-              labelStyle: TextStyle(
-                color: isSelected ? const Color(0xFF6366F1) : Colors.grey[700],
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                fontSize: 13,
-              ),
-              shape: StadiumBorder(
-                side: BorderSide(
-                  color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
-                  width: 1,
-                ),
-              ),
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSortOptions() {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[100]!),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.sort, size: 18, color: Colors.grey),
-          const SizedBox(width: 12),
-          const Text(
-            'Sort by:',
-            style: TextStyle(fontSize: 13, color: Colors.grey),
+  PreferredSizeWidget _buildFilterChips() {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(50),
+      child: Container(
+        height: 50,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            bottom: BorderSide(color: Colors.grey[100]!),
           ),
-          const SizedBox(width: 12),
-          ..._sortOptions.map((option) {
-            final isSelected = _sortBy == option;
+        ),
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: _filters.length,
+          itemBuilder: (context, index) {
+            final filter = _filters[index];
+            final isSelected = _selectedFilter == filter;
             return Padding(
               padding: const EdgeInsets.only(right: 12),
-              child: ChoiceChip(
-                label: Text(option),
+              child: FilterChip(
+                label: Text(filter),
                 selected: isSelected,
                 onSelected: (selected) {
                   setState(() {
-                    _sortBy = option;
-                    _showSortOptions = false;
+                    _selectedFilter = filter;
                   });
                   HapticFeedback.lightImpact();
                 },
                 backgroundColor: Colors.grey[100],
                 selectedColor: const Color(0xFF6366F1).withOpacity(0.1),
+                checkmarkColor: const Color(0xFF6366F1),
                 labelStyle: TextStyle(
                   color: isSelected ? const Color(0xFF6366F1) : Colors.grey[700],
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  fontSize: 12,
+                  fontSize: 13,
+                ),
+                shape: StadiumBorder(
+                  side: BorderSide(
+                    color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
+                    width: 1,
+                  ),
                 ),
                 elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
             );
-          }).toList(),
-        ],
+          },
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildSortOptions() {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(50),
+      child: Container(
+        height: 50,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            bottom: BorderSide(color: Colors.grey[100]!),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.sort, size: 18, color: Colors.grey),
+            const SizedBox(width: 12),
+            const Text(
+              'Sort by:',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(width: 12),
+            ..._sortOptions.map((option) {
+              final isSelected = _sortBy == option;
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: ChoiceChip(
+                  label: Text(option),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    setState(() {
+                      _sortBy = option;
+                      _showSortOptions = false;
+                    });
+                    HapticFeedback.lightImpact();
+                  },
+                  backgroundColor: Colors.grey[100],
+                  selectedColor: const Color(0xFF6366F1).withOpacity(0.1),
+                  labelStyle: TextStyle(
+                    color: isSelected ? const Color(0xFF6366F1) : Colors.grey[700],
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontSize: 12,
+                  ),
+                  elevation: 0,
+                ),
+              );
+            }).toList(),
+          ],
+        ),
       ),
     );
   }
@@ -578,7 +583,9 @@ class _NotebookHomeScreenState extends State<NotebookHomeScreen>
         content: Text('Redirecting to secure access...'),
         duration: Duration(milliseconds: 1500),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius side: circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
       ),
     );
 
