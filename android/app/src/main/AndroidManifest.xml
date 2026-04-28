@@ -16,9 +16,7 @@
     
     <!-- DO NOT ADD: WRITE_EXTERNAL_STORAGE - This would expose your vault -->
     <!-- DO NOT ADD: MANAGE_EXTERNAL_STORAGE - This is for file managers only -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- Note: READ_EXTERNAL_STORAGE is already declared above, do not duplicate -->
     
     <!-- ======================================== -->
     <!-- APPLICATION CONFIGURATION                 -->
