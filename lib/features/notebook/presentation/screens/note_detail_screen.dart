@@ -5,13 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:file_picker/file_picker.dart';
 import '../../data/models/note_model.dart';
 import '../controllers/note_controller.dart';
 import 'add_edit_note_screen.dart';
@@ -60,21 +59,6 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
     _animationController.forward();
 
     _scrollController.addListener(_onScroll);
-
-    _requestStoragePermission();
-  }
-
-  Future<void> _requestStoragePermission() async {
-    if (Platform.isAndroid) {
-      // For Android 13+ we need different permissions
-      if (await Permission.storage.isDenied) {
-        await Permission.storage.request();
-      }
-      // For Android 11+ we also need manage external storage
-      if (await Permission.manageExternalStorage.isDenied) {
-        await Permission.manageExternalStorage.request();
-      }
-    }
   }
 
   void _onScroll() {
@@ -139,8 +123,8 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
           color: Colors.green,
         ),
         _buildActionButton(
-          icon: Icons.print,
-          onPressed: _isPrinting ? null : _printNote,
+          icon: Icons.picture_as_pdf,
+          onPressed: _isPrinting ? null : _generateAndSharePdf,
           color: Colors.purple,
         ),
         _buildActionButton(
@@ -189,8 +173,8 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
     switch (icon) {
       case Icons.share:
         return 'Share Note';
-      case Icons.print:
-        return 'Print Note';
+      case Icons.picture_as_pdf:
+        return 'Generate & Share PDF';
       case Icons.favorite:
       case Icons.favorite_border:
         return _currentNote.isFavorite
@@ -530,25 +514,41 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
     return buffer.toString();
   }
 
-  Future<void> _printNote() async {
+  Future<void> _generateAndSharePdf() async {
     if (_isPrinting) return;
 
     HapticFeedback.mediumImpact();
     setState(() => _isPrinting = true);
 
-    // Show loading indicator
+    // Show loading indicator with cancel option
+    bool isCancelled = false;
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => WillPopScope(
-        onWillPop: () async => false,
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        onWillPop: () async {
+          isCancelled = true;
+          return true;
+        },
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Preparing PDF...', style: TextStyle(color: Colors.white)),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('Generating PDF...'),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  isCancelled = true;
+                  Navigator.pop(context);
+                },
+                child: const Text('Cancel'),
+              ),
             ],
           ),
         ),
@@ -556,132 +556,26 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
     );
 
     try {
-      // Generate PDF using the pdf package
-      final pdf = pw.Document();
+      if (isCancelled) {
+        if (mounted) Navigator.pop(context);
+        _showSnackBar('PDF generation cancelled');
+        return;
+      }
 
-      // Add page
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(40),
-          build: (pw.Context context) => [
-            // Title
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  _currentNote.title,
-                  style: pw.TextStyle(
-                    fontSize: 28,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 20),
+      // Generate PDF with proper formatting
+      final pdfBytes = await _generateProfessionalPdf();
 
-                // Metadata
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(10),
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.grey200,
-                    borderRadius: pw.BorderRadius.circular(5),
-                  ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'Created: ${_formatDateTime(_currentNote.createdAt)}',
-                        style: pw.TextStyle(fontSize: 10),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Last Updated: ${_formatDateTime(_currentNote.lastEdited)}',
-                        style: pw.TextStyle(fontSize: 10),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Word Count: ${_getWordCount()}',
-                        style: pw.TextStyle(fontSize: 10),
-                      ),
-                      pw.Text(
-                        'Reading Time: ${_getReadTime()}',
-                        style: pw.TextStyle(fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(height: 20),
-
-                // Content
-                pw.Text(
-                  _currentNote.content.isEmpty
-                      ? 'No content'
-                      : _currentNote.content,
-                  style: const pw.TextStyle(fontSize: 12, height: 1.5),
-                ),
-
-                // Tags
-                if (_currentNote.tags.isNotEmpty) ...[
-                  pw.SizedBox(height: 30),
-                  pw.Text(
-                    'Tags',
-                    style: pw.TextStyle(
-                      fontSize: 16,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 10),
-                  pw.Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _currentNote.tags
-                        .map(
-                          (tag) => pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: pw.BoxDecoration(
-                              color: PdfColors.blue100,
-                              borderRadius: pw.BorderRadius.circular(20),
-                            ),
-                            child: pw.Text(
-                              '#$tag',
-                              style: pw.TextStyle(
-                                fontSize: 11,
-                                color: PdfColors.blue800,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-
-                // Footer
-                pw.SizedBox(height: 40),
-                pw.Divider(),
-                pw.SizedBox(height: 10),
-                pw.Center(
-                  child: pw.Text(
-                    'Printed from Note App • ${DateFormat('MMM d, yyyy • h:mm a').format(DateTime.now())}',
-                    style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-
-      // Get PDF bytes
-      final pdfBytes = await pdf.save();
+      if (isCancelled) {
+        _showSnackBar('PDF generation cancelled');
+        return;
+      }
 
       // Close loading dialog
       if (mounted) Navigator.pop(context);
 
       // Save PDF with user selected location
       final fileName =
-          'Note_${_currentNote.title.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+          'Note_${_currentNote.title.replaceAll(' ', '_')}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
 
       // Let user choose where to save
       String? savedPath = await FilePicker.platform.saveFile(
@@ -693,19 +587,217 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
       if (savedPath != null) {
         _showSnackBar('PDF saved successfully!');
 
-        // Show options after saving
         if (mounted) {
           await _showPrintOptions(File(savedPath), pdfBytes);
         }
       } else {
-        _showSnackBar('Save cancelled');
+        _showSnackBar('Save cancelled by user');
       }
     } catch (e) {
       if (mounted) Navigator.pop(context);
-      _showSnackBar('Error preparing PDF: $e');
+      _showSnackBar(
+        'Error generating PDF: ${e.toString().replaceFirst('Exception: ', '')}',
+      );
     } finally {
       if (mounted) setState(() => _isPrinting = false);
     }
+  }
+
+  Future<Uint8List> _generateProfessionalPdf() async {
+    final pdf = pw.Document();
+
+    // Split content into pages
+    final contentLines = _currentNote.content.split('\n');
+    final linesPerPage = 45; // Approximate lines per page
+    final pages = <List<String>>[];
+
+    for (var i = 0; i < contentLines.length; i += linesPerPage) {
+      pages.add(
+        contentLines.sublist(
+          i,
+          i + linesPerPage > contentLines.length
+              ? contentLines.length
+              : i + linesPerPage,
+        ),
+      );
+    }
+
+    // If no content, create at least one page
+    if (pages.isEmpty) {
+      pages.add(['No content']);
+    }
+
+    for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      final pageContent = pages[pageIndex];
+      final isFirstPage = pageIndex == 0;
+      final pageNumber = pageIndex + 1;
+      final totalPages = pages.length;
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(40),
+          build: (pw.Context context) => [
+            // Header with title (only on first page)
+            if (isFirstPage) ...[
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  // Title - Large, bold, black
+                  pw.Text(
+                    _currentNote.title,
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                    ),
+                  ),
+                  pw.SizedBox(height: 20),
+
+                  // Metadata section
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(12),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.grey100,
+                      borderRadius: pw.BorderRadius.circular(8),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Row(
+                          children: [
+                            pw.Icon(pw.IconData(0xe8df), size: 12),
+                            pw.SizedBox(width: 4),
+                            pw.Text(
+                              'Created: ${_formatDateTime(_currentNote.createdAt)}',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.grey700,
+                              ),
+                            ),
+                            pw.SizedBox(width: 16),
+                            pw.Icon(pw.IconData(0xe3c9), size: 12),
+                            pw.SizedBox(width: 4),
+                            pw.Text(
+                              'Updated: ${_formatDateTime(_currentNote.lastEdited)}',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.grey700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Row(
+                          children: [
+                            pw.Icon(pw.IconData(0xe8b5), size: 12),
+                            pw.SizedBox(width: 4),
+                            pw.Text(
+                              _getWordCount(),
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.grey700,
+                              ),
+                            ),
+                            pw.SizedBox(width: 16),
+                            pw.Icon(pw.IconData(0xe425), size: 12),
+                            pw.SizedBox(width: 4),
+                            pw.Text(
+                              _getReadTime(),
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                color: PdfColors.grey700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  pw.SizedBox(height: 24),
+                ],
+              ),
+            ],
+
+            // Content
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                for (var line in pageContent)
+                  pw.Text(
+                    line.isEmpty ? ' ' : line,
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      height: 1.5,
+                      color: PdfColors.black,
+                    ),
+                  ),
+              ],
+            ),
+
+            // Tags section (only on first page)
+            if (isFirstPage && _currentNote.tags.isNotEmpty) ...[
+              pw.SizedBox(height: 30),
+              pw.Text(
+                'Tags',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.black,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _currentNote.tags
+                    .map(
+                      (tag) => pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.blue50,
+                          borderRadius: pw.BorderRadius.circular(20),
+                          border: pw.Border.all(color: PdfColors.blue200),
+                        ),
+                        child: pw.Text(
+                          '#$tag',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            color: PdfColors.blue700,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+
+            // Footer with page number
+            pw.SizedBox(height: 30),
+            pw.Divider(),
+            pw.SizedBox(height: 10),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Generated from Note App',
+                  style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
+                ),
+                pw.Text(
+                  'Page $pageNumber of $totalPages',
+                  style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return await pdf.save();
   }
 
   Future<void> _showPrintOptions(File file, Uint8List pdfData) async {
@@ -729,7 +821,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
             ),
             const SizedBox(height: 20),
             const Text(
-              'Print Options',
+              'PDF Options',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
@@ -739,10 +831,14 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
               subtitle: const Text('Send to printer'),
               onTap: () async {
                 Navigator.pop(context);
-                await Printing.sharePdf(
-                  bytes: pdfData,
-                  filename: file.path.split('/').last,
-                );
+                try {
+                  await Printing.sharePdf(
+                    bytes: pdfData,
+                    filename: file.path.split('/').last,
+                  );
+                } catch (e) {
+                  _showSnackBar('Error printing: $e');
+                }
               },
             ),
             ListTile(
@@ -751,9 +847,15 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
               subtitle: const Text('Share via email, WhatsApp, etc.'),
               onTap: () async {
                 Navigator.pop(context);
-                await Share.shareXFiles([
-                  XFile(file.path),
-                ], subject: 'Note PDF');
+                try {
+                  await Share.shareXFiles(
+                    [XFile(file.path)],
+                    subject: 'Note PDF: ${_currentNote.title}',
+                    text: 'Check out this note: ${_currentNote.title}',
+                  );
+                } catch (e) {
+                  _showSnackBar('Error sharing: $e');
+                }
               },
             ),
             ListTile(
@@ -764,9 +866,9 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
               ),
               title: const Text('Open File Location'),
               subtitle: const Text('View in file manager'),
-              onTap: () async {
+              onTap: () {
                 Navigator.pop(context);
-                await _openFileLocation(file.path);
+                _showSnackBar('File saved in selected location');
               },
             ),
             const SizedBox(height: 20),
@@ -774,21 +876,6 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
         ),
       ),
     );
-  }
-
-  Future<void> _openFileLocation(String path) async {
-    try {
-      // Show the file location using platform channels or just inform user
-      _showSnackBar('File saved at: $path');
-
-      // For Android, you can try to open the folder
-      if (Platform.isAndroid) {
-        // You might want to use android_intent_plus package to open file manager
-        _showSnackBar('You can find the file in your Downloads folder');
-      }
-    } catch (e) {
-      _showSnackBar('File saved successfully');
-    }
   }
 
   Future<void> _editNote() async {
@@ -812,7 +899,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen>
         content: Text(message),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 2),
         action: SnackBarAction(label: 'OK', onPressed: () {}),
       ),
     );
