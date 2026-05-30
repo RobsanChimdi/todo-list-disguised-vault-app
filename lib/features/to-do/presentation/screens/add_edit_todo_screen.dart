@@ -340,6 +340,7 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Title Input
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -371,16 +372,28 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
             ),
           ),
           const SizedBox(height: 16),
+
+          // Priority Section
           _buildPrioritySection(),
           const SizedBox(height: 24),
+
+          // Category Section
           _buildCategorySection(),
           const SizedBox(height: 24),
+
+          // Due Date Section
           _buildDueDateSection(),
           const SizedBox(height: 24),
+
+          // Reminder Section
           _buildReminderSection(),
           const SizedBox(height: 24),
+
+          // Subtasks Section
           _buildSubTasksSection(),
           const SizedBox(height: 24),
+
+          // Description Input
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -390,9 +403,10 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
               controller: _descriptionController,
               focusNode: _descriptionFocusNode,
               maxLines: 5,
+              style: const TextStyle(color: Colors.black87, fontSize: 16),
               decoration: InputDecoration(
                 hintText: 'Add description...',
-                hintStyle: TextStyle(color: Colors.grey[400]),
+                hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -404,8 +418,12 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
             ),
           ),
           const SizedBox(height: 24),
+
+          // Tags Section
           _buildTagsSection(),
           const SizedBox(height: 24),
+
+          // Color Section
           _buildColorSection(),
         ],
       ),
@@ -416,7 +434,10 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Priority', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text(
+          'Priority',
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+        ),
         const SizedBox(height: 8),
         Row(
           children: TodoPriority.values.map((priority) {
@@ -425,16 +446,19 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: FilterChip(
-                  label: Text(priority.toString().split('.').last),
+                  label: Text(
+                    priority.toString().split('.').last,
+                    style: TextStyle(
+                      color: isSelected
+                          ? _getPriorityColor(priority)
+                          : Colors.grey[700],
+                    ),
+                  ),
                   selected: isSelected,
                   onSelected: (_) => setState(() => _priority = priority),
                   backgroundColor: Colors.grey[200],
                   selectedColor: _getPriorityColor(priority).withOpacity(0.2),
-                  labelStyle: TextStyle(
-                    color: isSelected
-                        ? _getPriorityColor(priority)
-                        : Colors.grey[700],
-                  ),
+                  checkmarkColor: _getPriorityColor(priority),
                 ),
               ),
             );
@@ -448,7 +472,10 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Category', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text(
+          'Category',
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -459,6 +486,9 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
                 _getCategoryIcon(category) +
                     ' ' +
                     category.toString().split('.').last,
+                style: TextStyle(
+                  color: isSelected ? Colors.blue : Colors.grey[700],
+                ),
               ),
               selected: isSelected,
               onSelected: (_) => setState(() => _category = category),
@@ -475,7 +505,10 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Due Date', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text(
+          'Due Date',
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+        ),
         const SizedBox(height: 8),
         InkWell(
           onTap: _selectDueDate,
@@ -494,13 +527,13 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
                       ? DateFormat('MMM dd, yyyy').format(_dueDate!)
                       : 'No due date',
                   style: TextStyle(
-                    color: _dueDate != null ? Colors.black : Colors.grey[600],
+                    color: _dueDate != null ? Colors.black87 : Colors.grey[600],
                   ),
                 ),
                 const Spacer(),
                 if (_dueDate != null)
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(Icons.close, size: 18, color: Colors.grey),
                     onPressed: () => setState(() => _dueDate = null),
                   ),
               ],
@@ -515,7 +548,10 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Reminder', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text(
+          'Reminder',
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+        ),
         const SizedBox(height: 8),
         InkWell(
           onTap: _selectReminderDate,
@@ -537,14 +573,14 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
                       : 'No reminder',
                   style: TextStyle(
                     color: _reminderDate != null
-                        ? Colors.black
+                        ? Colors.black87
                         : Colors.grey[600],
                   ),
                 ),
                 const Spacer(),
                 if (_reminderDate != null)
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(Icons.close, size: 18, color: Colors.grey),
                     onPressed: () => setState(() => _reminderDate = null),
                   ),
               ],
@@ -555,11 +591,18 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
     );
   }
 
+  // lib/features/todo/presentation/screens/add_edit_todo_screen.dart
+
+  // Fix the _buildSubTasksSection method - update the TextField for adding subtasks:
+
   Widget _buildSubTasksSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Subtasks', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text(
+          'Subtasks',
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+        ),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -584,11 +627,15 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
                             : null,
                         color: _subTasksCompleted[index]
                             ? Colors.grey
-                            : Colors.black,
+                            : Colors.black87,
                       ),
                     ),
                     secondary: IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
                       onPressed: () => _removeSubTask(index),
                     ),
                     controlAffinity: ListTileControlAffinity.leading,
@@ -601,26 +648,43 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: _subTaskController,
-                        decoration: InputDecoration(
-                          hintText: 'Add subtask...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100], // Added background color
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        onSubmitted: (_) => _addSubTask(),
+                        child: TextField(
+                          controller: _subTaskController,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontSize: 14,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Add subtask...',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 14,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                          ),
+                          onSubmitted: (_) => _addSubTask(),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle, color: Colors.blue),
-                      onPressed: _addSubTask,
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.add, color: Colors.white),
+                        onPressed: _addSubTask,
+                      ),
                     ),
                   ],
                 ),
@@ -632,11 +696,16 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
     );
   }
 
+  // Update the _buildTagsSection method:
+
   Widget _buildTagsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Tags', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text(
+          'Tags',
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+        ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(12),
@@ -650,22 +719,32 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
             children: [
               ..._tags.map(
                 (tag) => Chip(
-                  label: Text('#$tag'),
+                  label: Text(
+                    '#$tag',
+                    style: const TextStyle(color: Colors.blue),
+                  ),
                   onDeleted: () => _removeTag(tag),
-                  deleteIcon: const Icon(Icons.close, size: 16),
+                  deleteIcon: const Icon(
+                    Icons.close,
+                    size: 16,
+                    color: Colors.blue,
+                  ),
                   backgroundColor: Colors.blue.withOpacity(0.1),
                 ),
               ),
-              SizedBox(
+              Container(
                 width: 120,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100], // Added background color
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 child: TextField(
                   controller: _tagController,
+                  style: const TextStyle(color: Colors.black87, fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Add tag...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
+                    hintStyle: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 8,
@@ -687,7 +766,7 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
       children: [
         const Text(
           'Background Color',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
         ),
         const SizedBox(height: 8),
         Container(

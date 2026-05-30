@@ -63,7 +63,7 @@ class TodoHomeScreen extends StatelessWidget {
       actions: [
         // Search Button - opens search bar
         IconButton(
-          icon: const Icon(Icons.search, color: Colors.black87),
+          icon: const Icon(Icons.search, color: Colors.black),
           onPressed: () => _toggleSearch(controller),
           tooltip: 'Search Tasks',
         ),
@@ -206,8 +206,11 @@ class TodoHomeScreen extends StatelessWidget {
         const SizedBox(width: 8),
       ],
       bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(100),
+        preferredSize: Size.fromHeight(
+          controller.isSearching.value ? 160 : 100,
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             // Search Bar (shown when searching)
             Obx(
@@ -216,42 +219,37 @@ class TodoHomeScreen extends StatelessWidget {
                   : const SizedBox.shrink(),
             ),
             // Stats Bar
-            Obx(
-              () => Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                color: Colors.grey[50],
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStatItem(
-                      icon: Icons.assignment,
-                      label: 'Total',
-                      value: '${controller.totalTodos}',
-                      color: Colors.blue,
-                    ),
-                    _buildStatItem(
-                      icon: Icons.check_circle,
-                      label: 'Completed',
-                      value: '${controller.completedTodosCount}',
-                      color: Colors.green,
-                    ),
-                    _buildStatItem(
-                      icon: Icons.pending,
-                      label: 'Pending',
-                      value: '${controller.pendingTodos.length}',
-                      color: Colors.orange,
-                    ),
-                    _buildStatItem(
-                      icon: Icons.flag,
-                      label: 'Important',
-                      value: '${controller.importantTodos.length}',
-                      color: Colors.red,
-                    ),
-                  ],
-                ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.grey[50],
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatItem(
+                    icon: Icons.assignment,
+                    label: 'Total',
+                    value: '${controller.totalTodos}',
+                    color: Colors.blue,
+                  ),
+                  _buildStatItem(
+                    icon: Icons.check_circle,
+                    label: 'Completed',
+                    value: '${controller.completedTodosCount}',
+                    color: Colors.green,
+                  ),
+                  _buildStatItem(
+                    icon: Icons.pending,
+                    label: 'Pending',
+                    value: '${controller.pendingTodos.length}',
+                    color: Colors.orange,
+                  ),
+                  _buildStatItem(
+                    icon: Icons.flag,
+                    label: 'Important',
+                    value: '${controller.importantTodos.length}',
+                    color: Colors.red,
+                  ),
+                ],
               ),
             ),
             // Tab Bar
@@ -279,31 +277,51 @@ class TodoHomeScreen extends StatelessWidget {
           Expanded(
             child: TextField(
               autofocus: true,
+              style: const TextStyle(
+                color: Colors.black87, // Added - text color
+                fontSize: 16,
+              ),
               decoration: InputDecoration(
                 hintText: 'Search tasks...',
-                prefixIcon: const Icon(Icons.search, size: 20),
+                hintStyle: TextStyle(
+                  color: Colors.grey[500], // Changed from grey[400] to darker
+                  fontSize: 14,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 20,
+                  color: Colors.grey[600], // This is not a constant value
+                ),
                 suffixIcon: Obx(
                   () => controller.searchQuery.value.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.close, size: 20),
+                          icon: Icon(
+                            Icons.close,
+                            size: 20,
+                            color: Colors.grey[600], // Remove const here
+                          ),
                           onPressed: () => controller.clearSearch(),
                         )
                       : const SizedBox.shrink(),
                 ),
+
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
                 fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 0,
+                  horizontal: 16,
+                ),
               ),
               onChanged: (value) => controller.search(value),
             ),
           ),
           TextButton(
             onPressed: () => _toggleSearch(controller),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.blue)),
           ),
         ],
       ),
@@ -708,7 +726,7 @@ class TodoHomeScreen extends StatelessWidget {
                       Expanded(
                         child: Text(
                           todo.title,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: Colors.black87,

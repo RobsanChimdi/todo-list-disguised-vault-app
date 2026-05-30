@@ -108,7 +108,7 @@ class _LockScreenState extends State<LockScreen> {
                       Text(
                         _authController.isLocked.value
                             ? 'Too many failed attempts'
-                            : 'Enter your PIN to access the secure vault',
+                            : 'Enter your pin',
                         style: AppStyles.bodyText.copyWith(
                           color: Colors.grey[600],
                         ),
