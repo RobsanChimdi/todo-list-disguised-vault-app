@@ -2,35 +2,35 @@
 
 A sophisticated mobile application that disguises itself as a simple task manager while providing a secure, encrypted vault for sensitive files. Perfect for privacy-conscious users who need to protect sensitive information.
 
-## 🎭 Overview
+##  Overview
 
 This app appears to be a normal to-do list application called "My Tasks", but it contains a hidden, PIN-protected vault where you can securely store encrypted files. The disguise is so effective that even someone looking at your phone would only see a task manager.
 
-## ✨ Features
+##  Features
 
 ### Visible Features (The Disguise - Task Manager)
-- ✅ Complete task management system
-- 📝 Create, edit, and delete tasks
-- 🏷️ Add tags, priorities, and due dates
-- 📊 Task statistics and completion tracking
-- 🔍 Search, sort, and filter tasks
-- 🎨 Customizable background colors
-- 📤 Export tasks as text
-- 💾 Local storage (no cloud sync)
+- Complete task management system
+- Create, edit, and delete tasks
+- Add tags, priorities, and due dates
+- Task statistics and completion tracking
+- Search, sort, and filter tasks
+-  Customizable background colors
+-  Export tasks as text
+-  Local storage (no cloud sync)
 
 ### Hidden Features (The Vault)
-- 🔐 PIN-protected secure vault
-- 📁 Encrypted file storage (images, videos, documents, audio)
-- 🔒 AES-256 encryption for all vault files
-- 👆 Biometric authentication support (fingerprint/face ID)
-- 📸 Capture photos directly to vault
-- 📎 Import files from gallery/file manager
-- 📄 Create secure text notes
-- 🔄 Share encrypted files (decrypted on-the-fly)
-- 🗂️ Custom folder organization
-- 🔍 Search within vault
+-  PIN-protected secure vault
+-  Encrypted file storage (images, videos, documents, audio)
+-  AES-256 encryption for all vault files
+-  Biometric authentication support (fingerprint/face ID)
+- Capture photos directly to vault
+- Import files from gallery/file manager
+- Create secure text notes
+- Share encrypted files (decrypted on-the-fly)
+- Custom folder organization
+- Search within vault
 
-## 📱 How to Use
+##  How to Use
 
 ### First-Time Setup
 
@@ -55,4 +55,4 @@ When you first open the app:
 
 Once you have a PIN, use any of these secret methods:
 
-#### 🔐 Method 1: Long Press FAB (Easiest)
+####  Method 1: Long Press FAB (Easiest)
