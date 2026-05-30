@@ -18,6 +18,10 @@ class TodoController extends GetxController {
   final RxList<Todo> _filteredTodos = <Todo>[].obs;
   final RxString _searchQuery = ''.obs;
 
+  // ADD THESE TWO LINES - Search UI state
+  final RxBool isSearching = false.obs;
+  final RxString searchQuery = ''.obs;
+
   TodoController(this._repository) {
     // Initialize default sort
     _currentSortBy.value = 'date_desc';
@@ -154,13 +158,24 @@ class TodoController extends GetxController {
     return todos;
   }
 
+  // ==================== SEARCH UI METHODS ====================
+
+  void toggleSearch() {
+    isSearching.value = !isSearching.value;
+    if (!isSearching.value) {
+      clearSearch();
+    }
+  }
+
   // Search methods
   void search(String query) {
+    searchQuery.value = query;
     _searchQuery.value = query;
     update(); // Refresh UI
   }
 
   void clearSearch() {
+    searchQuery.value = '';
     _searchQuery.value = '';
     update();
   }
@@ -367,6 +382,8 @@ class TodoController extends GetxController {
       // Clear any existing filters after reload
       clearFilter();
       _searchQuery.value = '';
+      searchQuery.value = '';
+      isSearching.value = false;
     } catch (e) {
       _error.value = e.toString();
     }

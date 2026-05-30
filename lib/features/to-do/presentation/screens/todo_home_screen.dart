@@ -61,10 +61,10 @@ class TodoHomeScreen extends StatelessWidget {
       ),
       centerTitle: false,
       actions: [
-        // Search Button
+        // Search Button - opens search bar
         IconButton(
           icon: const Icon(Icons.search, color: Colors.black87),
-          onPressed: () => _showSearchDialog(controller, context),
+          onPressed: () => _toggleSearch(controller),
           tooltip: 'Search Tasks',
         ),
 
@@ -209,6 +209,12 @@ class TodoHomeScreen extends StatelessWidget {
         preferredSize: const Size.fromHeight(100),
         child: Column(
           children: [
+            // Search Bar (shown when searching)
+            Obx(
+              () => controller.isSearching.value
+                  ? _buildSearchBar(controller)
+                  : const SizedBox.shrink(),
+            ),
             // Stats Bar
             Obx(
               () => Container(
@@ -264,6 +270,53 @@ class TodoHomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildSearchBar(TodoController controller) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search tasks...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: Obx(
+                  () => controller.searchQuery.value.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () => controller.clearSearch(),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Colors.grey[100],
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+              onChanged: (value) => controller.search(value),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _toggleSearch(controller),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleSearch(TodoController controller) {
+    controller.toggleSearch();
+    if (!controller.isSearching.value) {
+      controller.clearSearch();
+    }
+  }
+
   Widget _buildStatItem({
     required IconData icon,
     required String label,
@@ -288,44 +341,6 @@ class TodoHomeScreen extends StatelessWidget {
         ),
         Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
       ],
-    );
-  }
-
-  void _showSearchDialog(TodoController controller, BuildContext context) {
-    final searchController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Search Tasks'),
-        content: TextField(
-          controller: searchController,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'Search by title, description...',
-            prefixIcon: const Icon(Icons.search),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          onChanged: (value) {
-            controller.search(value);
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              controller.clearSearch();
-              searchController.clear();
-              Navigator.pop(context);
-            },
-            child: const Text('Clear'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -475,17 +490,6 @@ class TodoHomeScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  void _showFakeUpgrade() {
-    Get.snackbar(
-      'Premium Feature',
-      'Checking subscription status...',
-      backgroundColor: Colors.orange,
-      colorText: Colors.white,
-      duration: const Duration(milliseconds: 800),
-      snackPosition: SnackPosition.BOTTOM,
     );
   }
 
