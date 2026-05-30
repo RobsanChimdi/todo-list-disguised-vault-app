@@ -31,7 +31,6 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   Future<void> _checkBiometricAvailability() async {
-    // Check if biometrics is available and enabled
     _isBiometricAvailable.value = _authController.isBiometricsEnabled.value;
   }
 
@@ -72,12 +71,16 @@ class _LockScreenState extends State<LockScreen> {
         child: Obx(
           () => Stack(
             children: [
-              Center(
+              // SingleChildScrollView to prevent overflow
+              SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      const SizedBox(height: 20),
+
                       // Lock icon
                       Container(
                         padding: const EdgeInsets.all(20),
@@ -87,20 +90,21 @@ class _LockScreenState extends State<LockScreen> {
                         ),
                         child: Icon(
                           Icons.lock_outline,
-                          size: 60,
+                          size: 50,
                           color: AppColors.primary,
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
 
                       // Title
                       Text(
                         _authController.isLocked.value
                             ? 'Account Locked'
                             : 'Enter PIN',
-                        style: AppStyles.heading1.copyWith(fontSize: 28),
+                        style: AppStyles.heading1.copyWith(fontSize: 24),
+                        textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Text(
                         _authController.isLocked.value
                             ? 'Too many failed attempts'
@@ -113,7 +117,7 @@ class _LockScreenState extends State<LockScreen> {
 
                       if (_lockoutTimeRemaining.value > 0)
                         Padding(
-                          padding: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             'Try again in ${(_lockoutTimeRemaining.value ~/ 60)}m ${(_lockoutTimeRemaining.value % 60)}s',
                             style: TextStyle(
@@ -123,12 +127,12 @@ class _LockScreenState extends State<LockScreen> {
                           ),
                         ),
 
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 32),
 
                       // PIN display
                       if (!_authController.isLocked.value) ...[
                         _buildPinDisplay(),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
                       ],
 
                       // Error message
@@ -148,29 +152,34 @@ class _LockScreenState extends State<LockScreen> {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
 
                       // PIN Pad (only if not locked)
                       if (!_authController.isLocked.value) ...[
                         _buildPinPad(),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
                       ],
 
                       // Biometric button (if available)
                       if (_isBiometricAvailable.value &&
                           !_authController.isLocked.value)
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           child: ElevatedButton.icon(
                             onPressed: _authenticateWithBiometrics,
                             icon: Icon(
                               Platform.isIOS ? Icons.face : Icons.fingerprint,
+                              size: 18,
                             ),
-                            label: const Text('Use Biometric Authentication'),
+                            label: const Text('Use Biometric'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.grey.shade200,
                               foregroundColor: AppColors.primary,
                               elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
                             ),
                           ),
                         ),
@@ -181,11 +190,9 @@ class _LockScreenState extends State<LockScreen> {
                           onPressed: _showForgotPinDialog,
                           child: const Text(
                             'Forgot PIN?',
-                            style: TextStyle(fontSize: 14, color: Colors.grey),
+                            style: TextStyle(fontSize: 13, color: Colors.grey),
                           ),
                         ),
-
-                      const SizedBox(height: 8),
 
                       // Cancel button
                       TextButton(
@@ -194,9 +201,11 @@ class _LockScreenState extends State<LockScreen> {
                         },
                         child: const Text(
                           'Cancel',
-                          style: TextStyle(fontSize: 16),
+                          style: TextStyle(fontSize: 14),
                         ),
                       ),
+
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -220,9 +229,9 @@ class _LockScreenState extends State<LockScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(6, (index) {
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12),
-          width: 20,
-          height: 20,
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          width: 16,
+          height: 16,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: index < _enteredPin.value.length
@@ -236,6 +245,7 @@ class _LockScreenState extends State<LockScreen> {
 
   Widget _buildPinPad() {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -245,7 +255,7 @@ class _LockScreenState extends State<LockScreen> {
             _buildPinButton('3'),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -254,7 +264,7 @@ class _LockScreenState extends State<LockScreen> {
             _buildPinButton('6'),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -263,7 +273,7 @@ class _LockScreenState extends State<LockScreen> {
             _buildPinButton('9'),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -294,8 +304,8 @@ class _LockScreenState extends State<LockScreen> {
               }
             },
       child: Container(
-        width: 70,
-        height: 70,
+        width: 65,
+        height: 65,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: _authController.isLocked.value
@@ -311,13 +321,13 @@ class _LockScreenState extends State<LockScreen> {
         ),
         child: Center(
           child: isDelete
-              ? const Icon(Icons.backspace_outlined, size: 28)
+              ? const Icon(Icons.backspace_outlined, size: 24)
               : isClear
-              ? const Icon(Icons.clear, size: 28)
+              ? const Icon(Icons.clear, size: 24)
               : Text(
                   digit,
                   style: const TextStyle(
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -330,7 +340,6 @@ class _LockScreenState extends State<LockScreen> {
     if (_enteredPin.value.length < 6) {
       _enteredPin.value += digit;
 
-      // Auto-submit when PIN reaches max length
       if (_enteredPin.value.length == 6) {
         _submitPin();
       }
@@ -356,10 +365,8 @@ class _LockScreenState extends State<LockScreen> {
     final isValid = await _authController.verifyPin(_enteredPin.value);
 
     if (isValid) {
-      // Success - navigate to vault
       Get.offAllNamed('/vault');
     } else {
-      // Failed
       _enteredPin.value = '';
 
       if (_authController.isLocked.value) {
@@ -371,7 +378,6 @@ class _LockScreenState extends State<LockScreen> {
             'Invalid PIN. $remainingAttempts attempt${remainingAttempts != 1 ? 's' : ''} remaining.';
       }
 
-      // Auto clear error after 3 seconds
       Future.delayed(const Duration(seconds: 3), () {
         if (_errorMessage.value.isNotEmpty && !_authController.isLocked.value) {
           _errorMessage.value = '';
@@ -401,48 +407,50 @@ class _LockScreenState extends State<LockScreen> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Forgot PIN?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'If you forgot your PIN, you have two options:',
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              if (_authController.isBiometricsEnabled.value)
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'If you forgot your PIN, you have two options:',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                if (_authController.isBiometricsEnabled.value)
+                  _buildOptionCard(
+                    icon: Platform.isIOS ? Icons.face : Icons.fingerprint,
+                    title: 'Use Biometric Authentication',
+                    description:
+                        'If you have biometrics enabled, you can unlock using fingerprint/face ID',
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _authenticateWithBiometrics();
+                    },
+                  ),
+                const SizedBox(height: 12),
                 _buildOptionCard(
-                  icon: Platform.isIOS ? Icons.face : Icons.fingerprint,
-                  title: 'Use Biometric Authentication',
+                  icon: Icons.email,
+                  title: 'Reset via Email',
                   description:
-                      'If you have biometrics enabled, you can unlock using fingerprint/face ID',
-                  onTap: () async {
+                      'We\'ll send a verification code to your registered email',
+                  onTap: () {
                     Navigator.pop(context);
-                    await _authenticateWithBiometrics();
+                    _showResetPinDialog();
                   },
                 ),
-              const SizedBox(height: 12),
-              _buildOptionCard(
-                icon: Icons.email,
-                title: 'Reset via Email',
-                description:
-                    'We\'ll send a verification code to your registered email',
-                onTap: () {
-                  Navigator.pop(context);
-                  _showResetPinDialog();
-                },
-              ),
-              const SizedBox(height: 12),
-              _buildOptionCard(
-                icon: Icons.logout,
-                title: 'Logout and Re-login',
-                description: 'You\'ll need to set up your PIN again',
-                onTap: () {
-                  Navigator.pop(context);
-                  _showLogoutConfirmation();
-                },
-              ),
-            ],
+                const SizedBox(height: 12),
+                _buildOptionCard(
+                  icon: Icons.logout,
+                  title: 'Logout and Re-login',
+                  description: 'You\'ll need to set up your PIN again',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showLogoutConfirmation();
+                  },
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -476,7 +484,7 @@ class _LockScreenState extends State<LockScreen> {
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: AppColors.primary, size: 24),
+                child: Icon(icon, color: AppColors.primary, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -487,18 +495,20 @@ class _LockScreenState extends State<LockScreen> {
                       title,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: 13,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       description,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.grey[400]),
+              Icon(Icons.chevron_right, size: 20, color: Colors.grey[400]),
             ],
           ),
         ),
@@ -514,9 +524,7 @@ class _LockScreenState extends State<LockScreen> {
 
     RxInt currentStep = 0.obs;
     RxString verificationCode = ''.obs;
-    RxString resetToken = ''.obs;
     RxBool isCodeSent = false.obs;
-    RxBool isCodeVerified = false.obs;
     RxInt resendCooldown = 0.obs;
 
     showDialog(
@@ -533,15 +541,14 @@ class _LockScreenState extends State<LockScreen> {
                     ? 'Enter Verification Code'
                     : 'Set New PIN',
               ),
-              content: Container(
-                width: MediaQuery.of(context).size.width * 0.8,
+              content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (currentStep.value == 0) ...[
                       const Text(
                         'Enter your email address to receive a verification code.',
-                        style: TextStyle(fontSize: 14),
+                        style: TextStyle(fontSize: 13),
                       ),
                       const SizedBox(height: 16),
                       CustomTextField(
@@ -568,7 +575,6 @@ class _LockScreenState extends State<LockScreen> {
                                   return;
                                 }
 
-                                // Send reset code
                                 final success = await _authController
                                     .sendPinResetCode(email);
 
@@ -576,7 +582,6 @@ class _LockScreenState extends State<LockScreen> {
                                   isCodeSent.value = true;
                                   currentStep.value = 1;
 
-                                  // Start cooldown
                                   resendCooldown.value = 60;
                                   _startResendCooldown(
                                     resendCooldown,
@@ -617,7 +622,7 @@ class _LockScreenState extends State<LockScreen> {
                     if (currentStep.value == 1) ...[
                       const Text(
                         'Enter the 6-digit verification code sent to your email.',
-                        style: TextStyle(fontSize: 14),
+                        style: TextStyle(fontSize: 13),
                       ),
                       const SizedBox(height: 16),
                       CustomTextField(
@@ -636,8 +641,6 @@ class _LockScreenState extends State<LockScreen> {
                                   ? null
                                   : () async {
                                       final code = codeController.text.trim();
-                                      final email = emailController.text.trim();
-
                                       if (code.length != 6) {
                                         Get.snackbar(
                                           'Error',
@@ -647,11 +650,6 @@ class _LockScreenState extends State<LockScreen> {
                                         );
                                         return;
                                       }
-
-                                      // This would need a new method in AuthController
-                                      // to verify reset code without setting PIN yet
-                                      // For now, we'll proceed to next step
-                                      isCodeVerified.value = true;
                                       currentStep.value = 2;
                                     },
                               child: const Text('Verify Code'),
@@ -687,7 +685,7 @@ class _LockScreenState extends State<LockScreen> {
                     if (currentStep.value == 2) ...[
                       const Text(
                         'Enter your new PIN',
-                        style: TextStyle(fontSize: 14),
+                        style: TextStyle(fontSize: 13),
                       ),
                       const SizedBox(height: 16),
                       CustomTextField(
@@ -750,7 +748,6 @@ class _LockScreenState extends State<LockScreen> {
                               return;
                             }
 
-                            // Reset PIN
                             final success = await _authController
                                 .verifyResetCodeAndSetPin(
                                   emailController.text.trim(),

@@ -4,10 +4,10 @@ import 'package:get/get.dart';
 
 class AppRoutes {
   static const String splash = '/splash';
-  static const String notebook = '/notebook';
-  static const String addNote = '/add-note';
-  static const String editNote = '/edit-note';
-  static const String noteDetail = '/note-detail';
+  static const String todo = '/todo';
+  static const String addTodo = '/add-todo';
+  static const String editTodo = '/edit-todo';
+  static const String todoDetail = '/todo-detail';
   static const String setPin = '/set-pin';
   static const String lockScreen = '/lock-screen';
   static const String login = '/login';
@@ -16,16 +16,15 @@ class AppRoutes {
   static const String uploadFile = '/upload-file';
 
   // Navigation helper methods
-  static Future<T?> toNotebook<T>() =>
-      Get.toNamed<T>(notebook) ?? Future.value(null);
-  static Future<T?> toAddNote<T>() =>
-      Get.toNamed<T>(addNote) ?? Future.value(null);
+  static Future<T?> toTodo<T>() => Get.toNamed<T>(todo) ?? Future.value(null);
+  static Future<T?> toAddTodo<T>() =>
+      Get.toNamed<T>(addTodo) ?? Future.value(null);
 
-  static Future<T?> toEditNote<T>({required String noteId}) =>
-      Get.toNamed<T>(editNote, arguments: {'id': noteId}) ?? Future.value(null);
+  static Future<T?> toEditTodo<T>({required String todoId}) =>
+      Get.toNamed<T>(editTodo, arguments: {'id': todoId}) ?? Future.value(null);
 
-  static Future<T?> toNoteDetail<T>({required String noteId}) =>
-      Get.toNamed<T>(noteDetail, arguments: {'id': noteId}) ??
+  static Future<T?> toTodoDetail<T>({required String todoId}) =>
+      Get.toNamed<T>(todoDetail, arguments: {'id': todoId}) ??
       Future.value(null);
 
   static Future<T?> toSetPin<T>() =>
@@ -49,22 +48,22 @@ class AppRoutes {
       Get.toNamed<T>(uploadFile) ?? Future.value(null);
 
   // Navigation with replacement
-  static Future<T?> offAllToNotebook<T>() =>
-      Get.offAllNamed<T>(notebook) ?? Future.value(null);
+  static Future<T?> offAllToTodo<T>() =>
+      Get.offAllNamed<T>(todo) ?? Future.value(null);
   static Future<T?> offAllToLogin<T>() =>
       Get.offAllNamed<T>(login) ?? Future.value(null);
   static Future<T?> offAllToVault<T>() =>
       Get.offAllNamed<T>(vault) ?? Future.value(null);
 
   // Navigation with replacement and data
-  static Future<T?> offAllToNotebookWithData<T>(dynamic data) =>
-      Get.offAllNamed<T>(notebook, arguments: data) ?? Future.value(null);
+  static Future<T?> offAllToTodoWithData<T>(dynamic data) =>
+      Get.offAllNamed<T>(todo, arguments: data) ?? Future.value(null);
   static Future<T?> offAllToVaultWithData<T>(dynamic data) =>
       Get.offAllNamed<T>(vault, arguments: data) ?? Future.value(null);
 
   // Navigate and remove current route
-  static Future<T?> offToNotebook<T>() =>
-      Get.offNamed<T>(notebook) ?? Future.value(null);
+  static Future<T?> offToTodo<T>() =>
+      Get.offNamed<T>(todo) ?? Future.value(null);
   static Future<T?> offToVault<T>() =>
       Get.offNamed<T>(vault) ?? Future.value(null);
   static Future<T?> offToLogin<T>() =>
@@ -75,8 +74,8 @@ class AppRoutes {
   static void goBackWithResult<T>(T result) => Get.back(result: result);
 
   // Pop until specific route
-  static void popUntilNotebook() =>
-      Get.until((route) => route.settings.name == notebook);
+  static void popUntilTodo() =>
+      Get.until((route) => route.settings.name == todo);
   static void popUntilVault() =>
       Get.until((route) => route.settings.name == vault);
 

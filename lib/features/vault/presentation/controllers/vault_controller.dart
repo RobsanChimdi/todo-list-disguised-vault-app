@@ -24,6 +24,7 @@ class VaultController extends GetxController {
   var currentFolder = ''.obs;
   var selectedFilter = 'all'.obs;
   var searchQuery = ''.obs;
+  var filteredItems = <VaultItem>[].obs; // Add filtered items list
 
   // Predefined folders
   static const List<String> predefinedFolders = [
@@ -157,6 +158,7 @@ class VaultController extends GetxController {
       return b.createdAt.compareTo(a.createdAt);
     });
 
+    filteredItems.value = filtered;
     return filtered;
   }
 
@@ -472,8 +474,6 @@ class VaultController extends GetxController {
     }
   }
 
-  // Add this method to VaultController class
-
   Future<void> shareItem(VaultItem item) async {
     try {
       Get.dialog(
@@ -515,43 +515,72 @@ class VaultController extends GetxController {
       Get.snackbar('Error', 'Failed to share file: $e');
     }
   }
-  // In vault_controller.dart, update the logout method:
 
+  // ==================== LOGOUT METHODS ====================
+
+  // Method to logout and redirect to Todo home screen
+  void logoutAndGoToTodo() {
+    try {
+      // Clear all vault state
+      items.clear();
+      filteredItems.clear();
+      currentFolder.value = '';
+      selectedFilter.value = 'all';
+      searchQuery.value = '';
+
+      // Navigate to todo home screen and clear all previous routes
+      Get.offAllNamed('/todo');
+
+      // Show success message
+      Get.snackbar(
+        'Exited Vault',
+        'Returned to Task Manager',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 2),
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      print('Logout error: $e');
+      Get.snackbar('Error', 'Failed to exit vault');
+    }
+  }
+
+  // Alternative logout method with confirmation
   void logout() async {
     try {
       // Show confirmation dialog first
       final shouldLogout = await Get.dialog<bool>(
         AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
+          title: const Text('Exit Vault'),
+          content: const Text(
+            'Are you sure you want to exit the secure vault?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Get.back(result: false),
-              child: const Text('Cancel'),
+              child: const Text('Stay'),
             ),
             ElevatedButton(
               onPressed: () => Get.back(result: true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Logout'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('Exit'),
             ),
           ],
         ),
       );
 
       if (shouldLogout == true) {
-        // Clear any sensitive data
-        items.clear();
-        currentFolder.value = '';
-        selectedFilter.value = 'all';
-        searchQuery.value = '';
-
-        // Call auth controller logout
-        final authController = Get.find<AuthController>();
-        await authController.logout();
+        logoutAndGoToTodo();
       }
     } catch (e) {
       print('Logout error: $e');
       Get.snackbar('Error', 'Failed to logout');
     }
+  }
+
+  void lockVaultAndExit() {
+    // Clear sensitive data and exit
+    logoutAndGoToTodo();
   }
 }

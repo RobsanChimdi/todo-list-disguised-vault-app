@@ -658,7 +658,8 @@ class VaultHomeScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               Get.back();
-              controller.logout();
+              // Clear any sensitive data and redirect to todo home screen
+              controller.logoutAndGoToTodo();
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             child: const Text('Exit'),
